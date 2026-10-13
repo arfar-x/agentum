@@ -18,7 +18,6 @@ and the next cadence is attempted (FR-SCH-03).
 from __future__ import annotations
 
 import logging
-import os
 import signal
 import threading
 from dataclasses import dataclass, field
@@ -37,6 +36,7 @@ from kb.application.use_cases.refresh_entries import RefreshEntries
 from kb.application.use_cases.run_recorder import RunRecorder
 from kb.application.use_cases.schedule import Job, JobKind, ScheduleState, due
 from kb.application.use_cases.sync_source import Mode
+from kb.config import process_environment
 from kb.domain.content import ContentPolicy
 from kb.domain.runs import Trigger
 from kb.sources_config import FORM_SOURCE_ID, ConfigError, SourcesConfig, load
@@ -89,7 +89,7 @@ class Scheduler:
         #: None when no summarizer is configured: entries are then catalogued
         #: under their real titles, a deliberate and already-reported mode.
         self._check_summarizer = check_summarizer
-        self._environ = os.environ if environ is None else environ
+        self._environ = process_environment() if environ is None else environ
         self._verdict: tuple[datetime, str | None] | None = None
         self._state = ScheduleState()
         self._stop = threading.Event()

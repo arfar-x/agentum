@@ -343,6 +343,12 @@ catalog -- the console asks it to, through a queue (FR-SCH-11). Designed in
 | NFR-PRF-02 | A search MUST complete without waiting on any external system other than the catalog database. | done |
 | NFR-PRF-03 | A full reconciliation of a steady-state catalog SHOULD make no model calls. | done |
 
+### 7.4 Configuration and environment — `NFR-CFG`
+
+| id | Requirement | Status |
+|---|---|---|
+| NFR-CFG-01 | Only `kb/config.py` may read the process environment. Every other module receives a value, or a mapping obtained from it, as an argument. | done |
+
 ## 8. Interfaces
 
 ### 8.1 MCP tools (read-only)
@@ -503,6 +509,7 @@ which a flat catalog cannot answer.
 
 | Version | Date | Change |
 |---|---|---|
+| 2.8.0 | 2026-10-13 | Added §7.4 (NFR-CFG-01): `kb/config.py` is the only module that reads the process environment. The webhook receiver, the migrations directory and the source-config loader had each read variables directly, so "which variables does this process need" had no single answer. |
 | 1.0.0 | 2026-09-24 | First specification. Phases 1–3 implemented against it. |
 | 2.9.0 | 2026-10-17 | Production hardening of the admin console and its neighbours: NFR-DEP-09 (a lost database connection is replaced, not fatal -- before this, a database restart left the scheduler, console and MCP server failing until restarted by hand) FR-ADM-17 (health reflects the database) and FR-ADM-18 (bounded request bodies; a record's text fits what is kept) FR-CFG-13 (a configuration write is verified, and undone if it fails), FR-CFG-14 and FR-CFG-15 (the console cannot point a source at another component's secrets; source ids are case-insensitively unique), and FR-ADM-19 and FR-ADM-20 (stale record saves are refused; the console reports the scheduler's view of its own environment). The scheduler now publishes manual records that were saved or deleted without its being asked. |
 | 2.8.0 | 2026-10-14 | Added §6.11 (FR-ADM-01..16), FR-SCH-08..13, FR-CFG-10..12, FR-CLI-06, FR-SRC-07 and NFR-DEP-08: an admin console for the operator, in its own opt-in service. It reads run history and the catalog, queues syncs for the scheduler to run, edits the source configuration after an explicit approval, and holds manual `form` records with on-demand summaries. FR-ENT-02 now admits the catalog's own `form` kind; N2 and §11 say what that does and does not change. Run history gained a start-of-run record, a status and the trigger, because "is it running now, and who asked" was not answerable from the end-of-run row alone. |

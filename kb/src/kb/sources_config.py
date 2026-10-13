@@ -23,7 +23,6 @@ without editing every source.
 
 from __future__ import annotations
 
-import os
 import re
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -31,6 +30,7 @@ from typing import Annotated, Any, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
+from kb.config import process_environment
 from kb.domain.content import (
     DEFAULT_RAW_CONTENT_MAX_BYTES,
     MIN_RAW_CONTENT_MAX_BYTES,
@@ -111,7 +111,7 @@ def interpolate(
     failing. The scheduler never reads this way; it is the authority on whether
     the file is complete (FR-CFG-02).
     """
-    source = os.environ if env is None else env
+    source = process_environment() if env is None else env
     offset = 0  # characters consumed so far, for reporting the right line
 
     def replace(match: re.Match[str]) -> str:
@@ -377,7 +377,7 @@ def load(
     lenient: bool = False,
 ) -> SourcesConfig:
     """Read, interpolate, parse and validate the source configuration."""
-    location = path or Path(os.environ.get("KB_SOURCES_FILE", DEFAULT_PATH))
+    location = path or Path(process_environment().get("KB_SOURCES_FILE", DEFAULT_PATH))
     if not location.exists():
         raise ConfigError("file not found -- copy config/kb-sources.yaml.example to it", path=location)
     try:
@@ -397,7 +397,7 @@ def parse(
     """The same reading as `load`, from text -- so a proposed edit can be
     checked with exactly the rules the scheduler will apply to it."""
     location = path or Path("kb-sources.yaml")
-    environment = os.environ if env is None else env
+    environment = process_environment() if env is None else env
     raw = interpolate(text, env, path=location, lenient=lenient)
     try:
         document: Any = yaml.safe_load(raw) or {}
