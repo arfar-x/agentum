@@ -6,8 +6,8 @@ never document bodies: an agent finds the right document here, then reads it
 live through the Jira/Confluence tools with the asking user's own credentials.
 
 This is the operator's guide. The design and its requirements are
-[`docs/spec/knowledge-base.md`](spec/knowledge-base.md); the module's own
-internals are [`kb/README.md`](../kb/README.md).
+[`SPEC.md`](SPEC.md); the module's own
+internals are [`kb/README.md`](../README.md).
 
 ## What runs
 
@@ -20,8 +20,8 @@ internals are [`kb/README.md`](../kb/README.md).
 | `kb-webhook` | GitLab push events. Opt-in (`--profile webhook`) | loopback only |
 | `kb-admin` | The admin console. Opt-in (`--profile admin`) | loopback only |
 
-`make up` starts the first three and runs `scripts/kb-bootstrap.sh`, which
-creates the schema, the least-privilege query role, and `config/kb-sources.yaml`
+`make up` starts the first three and runs `kb/scripts/bootstrap.sh`, which
+creates the schema, the least-privilege query role, and `kb/config/sources.yaml`
 if it is missing — then prints whatever is still needed.
 
 ## Getting it filling
@@ -33,7 +33,7 @@ catalog it. This is *not* the per-user credential an agent reads a page with —
 that check still happens at the source, as the user.
 
 ```bash
-# .env
+# kb/.env.kb -- every variable: CONFIGURATION.md
 KB_CONFLUENCE_BASE_URL=https://wiki.internal
 KB_CONFLUENCE_USERNAME=kb-bot
 KB_CONFLUENCE_PASSWORD=...                     # or KB_CONFLUENCE_PAT
@@ -42,9 +42,9 @@ KB_JIRA_PAT=...
 GITLAB_BASE_URL=https://gitlab.internal
 GITLAB_TOKEN=...                               # read_api scope is enough
 
-KB_SUMMARIZER_URL=${VLLM_BASE_URL}             # the BASE url, ending in /v1
+KB_SUMMARIZER_URL=https://your-endpoint/v1     # the BASE url, ending in /v1
 KB_SUMMARIZER_MODEL=<the model it serves>      # see its GET /v1/models
-KB_SUMMARIZER_API_KEY=${VLLM_API_KEY}          # optional -- omit it if there is no key
+KB_SUMMARIZER_API_KEY=...                       # optional -- omit it if there is no key
 KB_SUMMARY_LANGUAGES=en,fa                     # what makes cross-language search work
 KB_TIMEZONE=Asia/Tehran                        # `at: "03:00"` means 03:00 here
 ```
@@ -72,12 +72,12 @@ accepted and trimmed; something that is not a URL fails at startup.
 
 ```bash
 make kb-sources-discover          # what Confluence, Jira and GitLab actually contain
-make kb-sources-discover WRITE=1  # append them to config/kb-sources.yaml, disabled
+make kb-sources-discover WRITE=1  # append them to kb/config/sources.yaml, disabled
 ```
 
 Discovery reports sizes (`412 pages -- Engineering`, `docs/ADRs: 14 files`) so
 the decision is "yes, catalog this one" rather than "what exists?". Then edit
-`config/kb-sources.yaml`: delete what does not belong, set `enabled: true` on
+`kb/config/sources.yaml`: delete what does not belong, set `enabled: true` on
 what does. Re-running discovery later **never rewrites a line you edited** — it
 only appends sources it has not seen, which makes it also the answer to "what is
 new that the catalog isn't watching?".
@@ -96,7 +96,7 @@ Useful knobs, all optional:
 ```
 
 `spec-draft` and `spec-approved` are the product-spec lifecycle labels
-([`PRODUCT_FLOW.md`](PRODUCT_FLOW.md)). Map both to `spec`, and don't exclude
+([`PRODUCT_FLOW.md`](../../docs/PRODUCT_FLOW.md)). Map both to `spec`, and don't exclude
 either: a draft spec is meant to be found and discussed. Labels also become the
 entry's tags, so agents can tell the draft from the approved version. Add the
 space your team writes specs in to `spaces`.
@@ -116,8 +116,8 @@ one `SOURCE=` at a time:
 make kb-sync-all           # FORCE=1 to bypass the content-hash gate
 ```
 
-It reads every `enabled: true` id straight from `config/kb-sources.yaml`
-and syncs each in turn, same live per-document progress. `scripts/kb-bootstrap.sh`
+It reads every `enabled: true` id straight from `kb/config/sources.yaml`
+and syncs each in turn, same live per-document progress. `kb/scripts/bootstrap.sh`
 (run by `make up`/`make kb-setup`) already calls this once on its own, the
 first time everything is configured and the catalog is still empty — this
 is for every time after that.
@@ -185,7 +185,7 @@ on disk under `raw_content`.
 
 ## How it stays current
 
-Four mechanisms, each switchable per source in `config/kb-sources.yaml`:
+Four mechanisms, each switchable per source in `kb/config/sources.yaml`:
 
 | Mechanism | Default | What it is for |
 |---|---|---|
@@ -206,7 +206,7 @@ Two properties hold everywhere, and are worth knowing before tuning anything:
 ### The GitLab webhook (optional)
 
 ```bash
-# .env
+# kb/.env.kb
 KB_WEBHOOK_SECRET=<long random string>
 ```
 
@@ -243,7 +243,7 @@ retires an entry from search without touching anything upstream.
 ### Switching syncing off
 
 ```bash
-# in config/kb-sources.yaml
+# in kb/config/sources.yaml
 approved: false
 # or, without editing anything -- and this wins over the file
 KB_SOURCES_APPROVED=false
@@ -255,18 +255,18 @@ an incident. Every command reports which of the two it used.
 ## The admin console
 
 A web page for what the commands above do, plus the things that are awkward at a
-prompt. It is off until you ask for it:
+prompt. It is off until you ask for it. `make kb-admin-up` generates
+`KB_ADMIN_TOKEN` and `KB_ADMIN_DB_PASSWORD` in `kb/.env.kb` if they are empty,
+creates the `kb_admin` database role, and starts the console:
 
 ```bash
-scripts/generate-secrets.sh      # prints KB_ADMIN_TOKEN and KB_ADMIN_DB_PASSWORD; paste into .env
-make kb-init                     # creates the kb_admin database role
 make kb-admin-up                 # http://127.0.0.1:8324 -- sign in with KB_ADMIN_TOKEN
 ```
 
 It listens on `127.0.0.1` only. To reach it from elsewhere use an SSH tunnel, or
 put a TLS-terminating proxy you control in front of it and set
 `KB_ADMIN_COOKIE_SECURE=true`; the token is the only credential, so do not
-expose it plain. Rotating the token is changing `.env` and restarting `kb-admin`
+expose it plain. Rotating the token is changing it in `kb/.env.kb` and restarting `kb-admin`
 (every session ends).
 
 | Screen | What it is for |
@@ -286,7 +286,7 @@ sync that is already running. The screens say "queued", then "running", then
 show the run.
 
 **Editing sources.** Every change is two steps. The console shows the exact
-diff to `config/kb-sources.yaml` and a warning for anything that matters — most
+diff to `kb/config/sources.yaml` and a warning for anything that matters — most
 of all that a source with `store_raw_content` makes its full text readable by
 every catalog user — and writes only after you tick that you have read it. It
 keeps your comments and your `${VAR}` placeholders, never writes a secret
@@ -369,7 +369,7 @@ an upgrade is always "apply what is new, skip what is recorded".
 | The nightly pass runs at the wrong hour | `KB_TIMEZONE`. `at: "03:00"` is read in that zone; the default is UTC |
 | The console says the scheduler has not reported, or a request stays queued | `make logs SERVICE=kb-scheduler`. Requests are served by the scheduler; a stopped one means nothing runs. A sync already running delays them |
 | The console cannot sign you in | `KB_ADMIN_TOKEN` must be at least 32 characters and is compared exactly; repeated failures lock the address out for a few minutes |
-| The console is read-only for sources | The file is mounted read-only or owned by someone `kb-admin` does not run as — see `KB_ADMIN_USER` in `.env.example` |
+| The console is read-only for sources | The file is mounted read-only or owned by someone `kb-admin` does not run as — see `KB_ADMIN_USER` in `kb/.env.example` |
 | A saved record never becomes "published" | The scheduler has to run the `form` source: check its logs. Records publish even with syncing switched off or an unreadable sources file |
 | An agent answers without searching | `make agent-import` — the instruction and the two tools live in `agents/*.yaml` |
 | `kb_get` returns `content: null` for a source with `store_raw_content: true` | The source has not been fully synced since the flag was turned on (`make kb-sync SOURCE=<id>`), or the document changed since the last sync — text is only served at the version its summary describes. `make kb-sources` shows the effective setting under `raw_content` |

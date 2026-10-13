@@ -139,7 +139,7 @@ export function SourcesView({
       badge={<Badge tone="indigo">{sources.data.sources.length} total</Badge>}
       description={
         <>
-          What the catalog reads, from <code className="text-indigo-300">config/kb-sources.yaml</code>. Whether a source keeps its documents&apos; text is decided per source, never as a default.
+          What the catalog reads, from <code className="text-indigo-300">kb/config/sources.yaml</code>. Whether a source keeps its documents&apos; text is decided per source, never as a default.
         </>
       }
       onRefresh={sources.reload}
@@ -168,7 +168,7 @@ export function SourcesView({
     >
       {!sources.data.editable && !sources.data.config_error ? (
         <Notice tone="amber">
-          The console cannot write <code>config/kb-sources.yaml</code> (it is mounted read-only, or owned by a user the console does not run as — see <code>KB_ADMIN_USER</code>). Edit the file by hand; this page still shows it.
+          The console cannot write <code>kb/config/sources.yaml</code> (it is mounted read-only, or owned by a user the console does not run as — see <code>KB_ADMIN_USER</code>). Edit the file by hand; this page still shows it.
         </Notice>
       ) : null}
       {sources.data.config_error ? <Notice tone="rose">The source configuration cannot be read: {sources.data.config_error}</Notice> : null}
@@ -230,7 +230,7 @@ export function SourcesView({
       ) : null}
 
       {shown.length === 0 ? (
-        <Empty>No source matches. Sources are added to <code>config/kb-sources.yaml</code> (or discovered with <code>make kb-sources-discover</code>).</Empty>
+        <Empty>No source matches. Sources are added to <code>kb/config/sources.yaml</code> (or discovered with <code>make kb-sources-discover</code>).</Empty>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {shown.map((source) => (

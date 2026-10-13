@@ -15,7 +15,7 @@ from kb.adapters.outbound.sources_editor import RuamelSourceEditor
 from kb.application.ports.source_files import CreateSource, DeleteSource, SetApproved, UpdateSource
 from kb.sources_config import ConfigError, parse
 
-EXAMPLE = Path(__file__).resolve().parents[3] / "config" / "kb-sources.yaml.example"
+EXAMPLE = Path(__file__).resolve().parents[2] / "config" / "sources.yaml.example"
 
 TEXT = """\
 # Sources the catalog reads. Edited by hand and from the console.

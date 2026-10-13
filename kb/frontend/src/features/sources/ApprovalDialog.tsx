@@ -74,7 +74,7 @@ export function ApprovalDialog({ change, preview, extra, onApplied, onClose }: P
   return (
     <Modal
       title={preview.summary}
-      subtitle="Review before anything is written to config/kb-sources.yaml"
+      subtitle="Review before anything is written to kb/config/sources.yaml"
       icon={<ShieldAlert className="h-5 w-5" />}
       width="max-w-3xl"
       onClose={onClose}

@@ -18,7 +18,7 @@ PASSWORD = "kb-admin-test-only"
 
 @pytest.fixture()
 def admin(store, dsn):
-    """A connection as `kb_admin`, with the grants applied the way kb-init.sh does."""
+    """A connection as `kb_admin`, with the grants applied the way kb/scripts/init.sh does."""
     from psycopg.conninfo import make_conninfo
 
     with store._connection.cursor() as cursor:

@@ -75,11 +75,13 @@ be decrypted, ever.** There is no re-encryption step to recover from this.
 Rules that follow from that:
 
 - Back up `.env` **every time** you back up the volumes, as one unit.
-  `scripts/backup.sh` does this automatically.
+  `scripts/backup.sh` does this automatically -- and copies each module's env
+  file (`kb/.env.kb`) beside it. The catalog database only accepts the
+  passwords it was initialised with, so that file is part of the same unit.
 - Never run `scripts/generate-secrets.sh` again on a host that already has
   data in `mongodb_data` -- it refuses to run if `.env` already has secrets
   set, but a manual hand-edit of those four values bypasses that guard.
-- Store at least one copy of `.env` somewhere other than this host.
+- Store at least one copy of `.env` (and `kb/.env.kb`) somewhere other than this host.
 
 ## Backup / restore
 
@@ -125,7 +127,7 @@ docker compose exec kb-db psql -U "$KB_POSTGRES_USER" "$KB_POSTGRES_DB" -c \
 
 (`kb_source_revision` is the source configuration's history; keep it.)
 
-**If `config/kb-sources.yaml` is damaged.** The console verifies every write
+**If `kb/config/sources.yaml` is damaged.** The console verifies every write
 and puts the old file back if it cannot complete one, so this takes a crash in
 the middle of a write or a hand edit gone wrong. The scheduler skips a file it
 cannot read and says so; the console's Sources page shows the error. Every
@@ -134,7 +136,7 @@ change the console ever made, with the file before and after, is in
 
 ```bash
 docker compose exec kb-db psql -U "$KB_POSTGRES_USER" "$KB_POSTGRES_DB" -At -c \
-  "SELECT after_text FROM kb_source_revision ORDER BY id DESC LIMIT 1" > config/kb-sources.yaml
+  "SELECT after_text FROM kb_source_revision ORDER BY id DESC LIMIT 1" > kb/config/sources.yaml
 ```
 
 Restart order after an upgrade: `kb-db` first, then `mcp-kb` and
