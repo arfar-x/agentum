@@ -17,7 +17,7 @@
 # kb/scripts/prepare.sh).
 include:
   - path: kb/compose.yaml
-    env_file: kb/.env.kb
+    env_file: kb/.env
 
 networks:
   frontend:

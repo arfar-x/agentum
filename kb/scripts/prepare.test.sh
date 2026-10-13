@@ -27,13 +27,13 @@ fresh() {
   cp "${repo}/kb/config/sources.yaml.example" "${tmp}/w/kb/config/"
   cd "${tmp}/w" || exit 1
 }
-kb() { env_get "$1" "${tmp}/w/kb/.env.kb"; }
+kb() { env_get "$1" "${tmp}/w/kb/.env"; }
 
 # --- a first run with nothing to carry over -----------------------------------
 fresh
 bash kb/scripts/prepare.sh >/dev/null
-check "env file created" "yes" "$([ -f kb/.env.kb ] && echo yes)"
-check "env file is private" "600" "$(stat -c %a kb/.env.kb)"
+check "env file created" "yes" "$([ -f kb/.env ] && echo yes)"
+check "env file is private" "600" "$(stat -c %a kb/.env)"
 check "sources file created" "yes" "$([ -f kb/config/sources.yaml ] && echo yes)"
 check "owner password generated" "48" "$(kb KB_POSTGRES_PASSWORD | wc -c | tr -d ' ')"
 check "reader password generated" "48" "$(kb KB_READER_PASSWORD | wc -c | tr -d ' ')"
@@ -49,9 +49,9 @@ bash kb/scripts/prepare.sh --admin >/dev/null
 check "a rerun keeps the admin token" "${token}" "$(kb KB_ADMIN_TOKEN)"
 
 # --- rerun changes nothing ----------------------------------------------------
-before="$(cat kb/.env.kb)"
+before="$(cat kb/.env)"
 bash kb/scripts/prepare.sh >/dev/null
-check "rerun leaves an existing env file alone" "${before}" "$(cat kb/.env.kb)"
+check "rerun leaves an existing env file alone" "${before}" "$(cat kb/.env)"
 
 # --- an upgrade from the root .env --------------------------------------------
 fresh
@@ -84,7 +84,7 @@ check "summarizer key reference resolved" "secret-key" "$(kb KB_SUMMARIZER_API_K
 check "model carried" "m1" "$(kb KB_SUMMARIZER_MODEL)"
 check "host pin renamed" "llm.example" "$(kb KB_SUMMARIZER_HOSTNAME)"
 check "host ip renamed" "10.1.2.3" "$(kb KB_SUMMARIZER_HOST_IP)"
-check "nothing from other modules leaks in" "" "$(grep -c 'JWT_SECRET\|must-not-leak' kb/.env.kb | grep -v '^0$')"
+check "nothing from other modules leaks in" "" "$(grep -c 'JWT_SECRET\|must-not-leak' kb/.env | grep -v '^0$')"
 check "legacy sources file moved, not regenerated" "approved: true" "$(cat kb/config/sources.yaml)"
 check "legacy sources file gone from config/" "no" "$([ -e config/kb-sources.yaml ] && echo yes || echo no)"
 

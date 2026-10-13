@@ -50,7 +50,7 @@ src/kb/          the code (hexagonal -- see AGENTS.md)       tests/       its su
 migrations/      SQL, applied by `make kb-init`
 compose.yaml     kb-db, mcp-kb, kb-scheduler, kb-cli, kb-webhook (included by the root docker-compose.yml)
 module.mk        the `make kb-*` targets (included by the root Makefile)
-.env.example     every variable the module reads  ->  copy to .env.kb (gitignored; `make up` creates it)
+.env.example     every variable the module reads  ->  copy to .env (gitignored; `make up` creates it)
 config/          sources.yaml.example  ->  sources.yaml (gitignored): which spaces and repos to catalog
 scripts/         prepare (env + config files), init (schema), bootstrap, sync-all, test
 docs/            SPEC.md (requirements), OPERATOR_GUIDE.md, CONFIGURATION.md (variables)
@@ -148,7 +148,7 @@ version, so an unchanged file costs no model call, and incremental runs compare
 commits and read only what changed.
 
 Sync needs a **read-only service account** (`KB_CONFLUENCE_*` / `KB_JIRA_*` in
-`kb/.env.kb`): it has to
+`kb/.env`): it has to
 see a space in order to catalog it. That is a different thing from the per-user
 credential an agent uses to read a page later — that check still happens at the
 source, as the user.
@@ -202,7 +202,7 @@ records with on-demand summaries.
 
 ```bash
 make kb-admin-up        # http://127.0.0.1:8324; first generates KB_ADMIN_TOKEN and
-                        # KB_ADMIN_DB_PASSWORD in kb/.env.kb and creates the kb_admin role
+                        # KB_ADMIN_DB_PASSWORD in kb/.env and creates the kb_admin role
 ```
 
 It is `src/kb/adapters/inbound/admin/` (a Starlette app) plus `frontend/` (React,
@@ -220,7 +220,7 @@ npm run build      # typecheck, then dist/ (the image copies it to /opt/kb/web)
 The webhook is the one inbound port, so it is opt-in and separate:
 
 ```bash
-# kb/.env.kb: KB_WEBHOOK_SECRET=<a long random string>
+# kb/.env: KB_WEBHOOK_SECRET=<a long random string>
 docker compose --profile webhook up -d kb-webhook
 # GitLab: Settings > Webhooks > URL http://<host>:8323/gitlab, same secret token
 ```

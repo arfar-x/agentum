@@ -33,7 +33,7 @@ catalog it. This is *not* the per-user credential an agent reads a page with —
 that check still happens at the source, as the user.
 
 ```bash
-# kb/.env.kb -- every variable: CONFIGURATION.md
+# kb/.env -- every variable: CONFIGURATION.md
 KB_CONFLUENCE_BASE_URL=https://wiki.internal
 KB_CONFLUENCE_USERNAME=kb-bot
 KB_CONFLUENCE_PASSWORD=...                     # or KB_CONFLUENCE_PAT
@@ -206,7 +206,7 @@ Two properties hold everywhere, and are worth knowing before tuning anything:
 ### The GitLab webhook (optional)
 
 ```bash
-# kb/.env.kb
+# kb/.env
 KB_WEBHOOK_SECRET=<long random string>
 ```
 
@@ -256,7 +256,7 @@ an incident. Every command reports which of the two it used.
 
 A web page for what the commands above do, plus the things that are awkward at a
 prompt. It is off until you ask for it. `make kb-admin-up` generates
-`KB_ADMIN_TOKEN` and `KB_ADMIN_DB_PASSWORD` in `kb/.env.kb` if they are empty,
+`KB_ADMIN_TOKEN` and `KB_ADMIN_DB_PASSWORD` in `kb/.env` if they are empty,
 creates the `kb_admin` database role, and starts the console:
 
 ```bash
@@ -266,7 +266,7 @@ make kb-admin-up                 # http://127.0.0.1:8324 -- sign in with KB_ADMI
 It listens on `127.0.0.1` only. To reach it from elsewhere use an SSH tunnel, or
 put a TLS-terminating proxy you control in front of it and set
 `KB_ADMIN_COOKIE_SECURE=true`; the token is the only credential, so do not
-expose it plain. Rotating the token is changing it in `kb/.env.kb` and restarting `kb-admin`
+expose it plain. Rotating the token is changing it in `kb/.env` and restarting `kb-admin`
 (every session ends).
 
 | Screen | What it is for |

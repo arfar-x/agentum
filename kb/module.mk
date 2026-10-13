@@ -8,7 +8,7 @@ kb-init: ## Create/upgrade the knowledge base schema + its read-only role (idemp
 
 kb-setup: ## Bring the knowledge base up and report what is still needed (runs inside `make up` too)
 	# The env file and source configuration must exist before any `docker compose`
-	# command: the compose file interpolates from kb/.env.kb, and kb-scheduler
+	# command: the compose file interpolates from kb/.env, and kb-scheduler
 	# bind-mounts kb/config/sources.yaml (Docker would create the mountpoint as an
 	# empty directory when the file doesn't exist yet).
 	kb/scripts/prepare.sh
@@ -36,7 +36,7 @@ kb-check: ## Is everything the catalog depends on actually usable (database, sum
 kb-status: ## What the catalog contains right now
 	docker compose run --rm kb-cli status
 
-kb-admin-up: ## Start the knowledge base admin console on 127.0.0.1 (generates KB_ADMIN_TOKEN and KB_ADMIN_DB_PASSWORD in kb/.env.kb when empty)
+kb-admin-up: ## Start the knowledge base admin console on 127.0.0.1 (generates KB_ADMIN_TOKEN and KB_ADMIN_DB_PASSWORD in kb/.env when empty)
 	kb/scripts/prepare.sh --admin
 	# kb-init is idempotent and is what creates the console's database role.
 	kb/scripts/init.sh
