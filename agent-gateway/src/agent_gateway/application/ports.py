@@ -56,3 +56,13 @@ class Clock(Protocol):
 
 class Lock(Protocol):
     def hold(self, key: str) -> AbstractAsyncContextManager[None]: ...
+
+
+class KeyStore(Protocol):
+    async def find_user(self, key_hash: str) -> tuple[str, str] | None:
+        """(key id, user id) for an active key, else None."""
+        ...
+
+
+class RateLimiter(Protocol):
+    async def allow(self, key_id: str, limit_per_minute: int) -> bool: ...

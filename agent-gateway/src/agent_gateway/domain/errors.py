@@ -60,3 +60,18 @@ class LoopExhausted(GatewayError):
 
 class ConfigError(Exception):
     """A configuration problem; always names the file."""
+
+
+class UpstreamRejected(GatewayError):
+    """The upstream refused the request; its status and error body are passed on."""
+
+    def __init__(self, status: int, body: dict | None, message: str = "") -> None:
+        err = (body or {}).get("error") if isinstance(body, dict) else None
+        text = (err.get("message") if isinstance(err, dict) else None) or message or "upstream error"
+        super().__init__(text)
+        self.status = status
+        self.body = body
+        if isinstance(err, dict):
+            self.type = err.get("type") or self.type
+            self.code = err.get("code")
+            self.param = err.get("param")

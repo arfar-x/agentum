@@ -82,11 +82,11 @@ A self-hosted service that serves configured agents through an OpenAI-compatible
 
 | id | Requirement | Status |
 |---|---|---|
-| FR-AGT-01 | An agent MUST be loaded from a YAML file validated against the agent-file contract; unknown fields MUST be rejected. | planned |
+| FR-AGT-01 | An agent MUST be loaded from a YAML file validated against the agent-file contract; unknown fields MUST be rejected. | done |
 | FR-AGT-02 | Agent ids MUST match `^[a-z0-9][a-z0-9-]*$` and be unique. | done |
 | FR-AGT-03 | A handoff target MUST name another loaded agent. | done |
 | FR-AGT-04 | A client system prompt MUST be combined per `client_system`: `append` (default), `prepend`, or `ignore`. | done |
-| FR-AGT-05 | `${VAR}` references in agent files MUST be resolved from the environment; an unset one MUST fail startup. | planned |
+| FR-AGT-05 | `${VAR}` references in agent files MUST be resolved from the environment; an unset one MUST fail startup. | done |
 | FR-AGT-06 | A passthrough request MUST NOT receive agent instructions, tools or retrieval. | planned |
 
 ### 5.4 Parameters — `FR-PRM`
@@ -123,8 +123,8 @@ A self-hosted service that serves configured agents through an OpenAI-compatible
 | id | Requirement | Status |
 |---|---|---|
 | FR-CRD-01 | Request-supplied credentials MUST take precedence over stored ones, per variable. | done |
-| FR-CRD-02 | Stored credentials MUST be encrypted at rest. | planned |
-| FR-CRD-03 | A user's credentials MUST NOT be usable by another user. | planned |
+| FR-CRD-02 | Stored credentials MUST be encrypted at rest. | done |
+| FR-CRD-03 | A user's credentials MUST NOT be usable by another user. | done |
 | FR-CRD-04 | Credentials MUST NOT appear in logs, errors, activity notes or model context. | planned |
 | FR-CRD-05 | Only variables a tool server declares MUST be forwarded to it. | done |
 
@@ -160,16 +160,16 @@ A self-hosted service that serves configured agents through an OpenAI-compatible
 | FR-COR-02 | Invalid tool-argument JSON or a schema violation MUST return a concise correction naming the problem. | done |
 | FR-COR-03 | An empty model reply MUST trigger one correction attempt. | done |
 | FR-COR-04 | Corrections MUST be bounded; exhaustion MUST produce a standard error. | done |
-| FR-COR-05 | Transient upstream failures MUST be retried with backoff before surfacing. | planned |
+| FR-COR-05 | Transient upstream failures MUST be retried with backoff before surfacing. | done |
 
 ### 5.11 Authentication and tenancy — `FR-AUT`
 
 | id | Requirement | Status |
 |---|---|---|
 | FR-AUT-01 | Every route except `/healthz` MUST require a valid bearer key. | planned |
-| FR-AUT-02 | Keys MUST be stored hashed and shown once at creation. | planned |
-| FR-AUT-03 | Revocation MUST take effect on the next request. | planned |
-| FR-AUT-04 | Threads, pending turns and credentials MUST be read only with the owning user's id. | planned |
+| FR-AUT-02 | Keys MUST be stored hashed and shown once at creation. | done |
+| FR-AUT-03 | Revocation MUST take effect on the next request. | done |
+| FR-AUT-04 | Threads, pending turns and credentials MUST be read only with the owning user's id. | done |
 | FR-AUT-05 | Requests per key MUST be rate-limited; over the limit MUST return 429. | planned |
 | FR-AUT-06 | Request bodies over the configured size MUST be refused. | planned |
 
@@ -177,17 +177,17 @@ A self-hosted service that serves configured agents through an OpenAI-compatible
 
 | id | Requirement | Status |
 |---|---|---|
-| FR-OPS-01 | Requests on one conversation MUST be serialized. | planned |
-| FR-OPS-02 | Threads and pending turns MUST survive a restart. | planned |
-| FR-OPS-03 | Pending turns MUST expire and be pruned. | planned |
+| FR-OPS-01 | Requests on one conversation MUST be serialized. | done |
+| FR-OPS-02 | Threads and pending turns MUST survive a restart. | done |
+| FR-OPS-03 | Pending turns MUST expire and be pruned. | done |
 | FR-OPS-04 | A command-line tool MUST create, list and revoke keys and set and delete credentials. | planned |
 
 ### 5.13 Configuration — `FR-CFG`
 
 | id | Requirement | Status |
 |---|---|---|
-| FR-CFG-01 | An invalid configuration file MUST stop startup with a message naming file and problem. | planned |
-| FR-CFG-02 | Non-secret settings (limits, aliases, ask-tool templates) MUST come from `config/gateway.yaml` with documented defaults. | planned |
+| FR-CFG-01 | An invalid configuration file MUST stop startup with a message naming file and problem. | done |
+| FR-CFG-02 | Non-secret settings (limits, aliases, ask-tool templates) MUST come from `config/gateway.yaml` with documented defaults. | done |
 | FR-CFG-03 | Secrets MUST come only from the environment. | planned |
 
 ### 5.14 Architecture — `NFR-ARC`

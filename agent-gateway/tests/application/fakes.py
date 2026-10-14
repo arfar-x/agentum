@@ -161,6 +161,7 @@ class Rig:
     store: FakeStore
     clock: Clock
     sink: Sink = field(default_factory=Sink)
+    driver: object = None
 
     async def turn(self, messages: list[ChatMessage], *, agent: str = "router", user: str = "u1",
                    client_tools: list[ToolDef] | None = None, request_vars: dict | None = None,
@@ -169,6 +170,8 @@ class Rig:
         self.deps.sink = self.sink
         request = TurnRequest(user_id=user, agent_id=agent, messages=messages, client_tools=client_tools or [],
                               request_vars=request_vars or {}, stream=stream, params=params or {})
+        if self.driver is not None:
+            return await run_turn(request, self.deps, NullLock(), self.driver)
         return await run_turn(request, self.deps, NullLock())
 
     def visible_reply(self) -> ChatMessage:
