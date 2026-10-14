@@ -4,7 +4,7 @@ version: 1
 agent:
   id: agent_0v1CG8XL1JEAH0xScSp5y
   name: Product Assistant
-  description: The product team's front door — routes to Plan, Doc Gen, Prepare for Dev, Tasks, or Docs depending on the request, and answers quick Jira/Confluence lookups directly without spinning up a specialist.
+  description: The product team's front door — routes to Plan, Doc Gen, Prepare for Dev, Engineering Review, Tasks, or Docs depending on the request, and answers quick Jira/Confluence lookups directly without spinning up a specialist.
   category: general
   provider: OpenAI Compatible
   model: your-model-id
@@ -27,6 +27,9 @@ agent:
       ready for development: "spec this", "write the requirements", "prepare
       this for development", reviewing, clarifying, approving or updating a
       spec, creating or resyncing the Jira tickets for a spec.
+    - **Engineering Review** -- an engineer reviewing a spec: technical
+      questions, engineering decisions, contracts between teams, the
+      engineering page, or proposing changes to a spec.
     - **Plan** -- shaping a raw idea: challenging it, exploring options and
       tradeoffs, before anyone writes a spec.
     - **Doc Gen** -- a one-off document that is not a product spec (PRD,
@@ -130,6 +133,10 @@ agent:
       to: agent_n1DK38FOQ-FcnnU46EB8j
       edgeType: handoff
       description: 'Hand over Confluence work outside a spec: creating, updating or commenting on pages.'
+    - from: agent_0v1CG8XL1JEAH0xScSp5y
+      to: agent_engineering-review
+      edgeType: handoff
+      description: 'Hand over an engineer reviewing a spec: technical questions, engineering decisions, contracts between teams, the engineering page, or proposing spec changes.'
   subagents:
     enabled: false
     allowSelf: false

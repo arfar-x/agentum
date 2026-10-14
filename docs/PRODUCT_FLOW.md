@@ -43,12 +43,52 @@ delegates a write.
 | 0. Understand | Current behavior is collected from the knowledge base and the documents behind it. Related Jira work is checked. A raw idea goes to **Plan** first, to be shaped. | Prepare for Dev, Plan |
 | 1. Specify | A first draft of the product spec, published straight away as a wiki page labelled `spec-draft` | Prepare for Dev (`product-spec`) |
 | 2. Clarify | At most five questions per round, each with a recommended answer. Every answer is written back into the spec. Questions only engineering can answer are posted as a comment on the page, to a named person or a role ("Backend team lead"). Replies are read and folded in when you resume. | Prepare for Dev (`spec-clarify`) |
+| 2b. Engineering proposals | When engineers have proposed spec changes, you accept, counter or reject each one, with a reason. Accepted ones are written into the spec. Optional: the flow does not wait for engineering. | Prepare for Dev |
 | 3. Readiness | The spec is checked against Spec Kit's requirements checklist plus product checks. It is not ready while any open question remains. | Prepare for Dev (`spec-readiness`) |
 | 4. Approve | You approve that exact version. The page is relabelled `spec-approved` and its Status line gets a revision number and date. | You, then Prepare for Dev |
 | 5. Tickets | One Epic per spec and one Story per user story, each with its acceptance criteria and a link back to the spec | Prepare for Dev |
 
 Every write (wiki page, comment, label, ticket) still asks for your
 confirmation first, as it always has.
+
+## Engineering review
+
+Engineers review a spec in **Engineering Review** (reachable from Product
+Assistant, or open it directly). It is not a stage product waits for and not an
+approval gate: it runs alongside the spec, whenever engineers have something to
+say, including after approval.
+
+Each spec gets one **engineering page**, a child of the spec page titled
+`<spec title> - Engineering`. It is a record of decisions, not an
+implementation plan -- the team's own Spec Kit plan does that. Like the spec
+page it keeps its Markdown in a collapsed source block (`engineering.md`), is
+changed with one patch per round, and carries no labels. Its sections, each
+item with an id that never changes:
+
+- **Decisions** (`ED-`): what was decided, why, the options considered, who
+  decided and when.
+- **Contracts** (`CT-`): what each team provides and expects of another
+  (backend, frontend, design, external teams), its status, and a short change
+  history. Contracts change often, so they live only here.
+- **Technical Questions** (`TQ-`): open questions to a named person, role or
+  team, and their answers.
+- **Spec Change Proposals** (`CP-`): the spec text, the proposed text, the
+  reason, and product's decision.
+- **Technical Dependencies**, each linking to its contract, and a **Log**.
+
+The page holds the state; comments on either page only call people's attention
+to an id. Division of labor:
+
+| | Spec page | Engineering page |
+|---|---|---|
+| Product (Prepare for Dev) | everything | sets each proposal's status and decision |
+| Engineering (Engineering Review) | nothing | everything else |
+
+The spec stays product-level: product dependencies are written out in it,
+technical ones are only a link to the engineering page. When an engineer
+thinks the spec should change, they raise a change proposal; product decides in
+stage 2b. Engineering Review reads documents first and uses GitLab (read-only)
+as a helper to check specific claims; it never relies on code alone.
 
 ## The product spec
 
@@ -94,6 +134,9 @@ they need the latest text.
 
 - **An approved spec page**, labelled `spec-approved`, findable in the
   knowledge base.
+- **The engineering page** under it, if engineers have started one: decisions,
+  agreed contracts and open technical questions. Its source block goes to
+  `specs/NNN-<feature>/engineering.md` next to `spec.md`.
 - **An Epic**, if the project uses epics, linking to the spec and its
   revision.
 - **One Story per user story**, labelled `spec-<feature>`, with this

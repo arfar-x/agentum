@@ -255,7 +255,9 @@ it.
   start from `agents/base-agent-template.yaml.example`.
 - [`docs/PRODUCT_FLOW.md`](docs/PRODUCT_FLOW.md) -- the product flow the
   agents run: idea -> product spec (Spec Kit `spec.md` shape, in Confluence,
-  `spec-draft`/`spec-approved` labels) -> Jira. agentflow stops at the ticket;
+  `spec-draft`/`spec-approved` labels) -> Jira, with an engineering page under
+  each spec (decisions, cross-team contracts, technical questions, change
+  proposals). agentflow stops at the ticket;
   the team's conventions live in `agents/*.yaml`, the generic spec skills in
   `agent-skills`.
 - [`docs/KEYCLOAK.md`](docs/KEYCLOAK.md) -- optional SSO, and how to

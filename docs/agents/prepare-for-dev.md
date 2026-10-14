@@ -23,9 +23,10 @@ It announces which stage it's in, in one short line, each turn.
 holds a spec, or the user names one, it continues from the spec's actual
 state -- the live Confluence page (via `confluence_get_page`), never its own
 memory of it. It never redrafts a spec that already exists and never creates
-a second page for one (always searches the space for the title first).
+a second page for one (always searches the space for the title first). It
+also looks for the spec's engineering page (`confluence_get_children`).
 
-### The six stages
+### The stages
 
 **0. Understand.** If the idea is still raw (unclear problem/users/
 tradeoffs), it says so and suggests Plan first instead of proceeding. Otherwise
@@ -53,6 +54,18 @@ a named owner if known or else a role ("Backend team lead"); it offers to
 post them as one `confluence_add_comment`. On resume, reads
 `confluence_get_comments` for replies and folds them in. After any round that
 changed the spec, patches the page once (see "Changing the spec page" below).
+
+**2b. Engineering proposals.** Whenever the spec's engineering page (written
+by [Engineering Review](engineering-review.md)) holds change proposals
+(`CP-001`...) in status `Proposed`, it settles them before readiness. For
+each proposal it asks (at most five per round, each with a recommended
+answer) whether to accept, counter (in the user's own words) or reject, with
+a reason for the last two. An accepted proposal is written into the spec in
+one patch (new ids if behavior changes, a Clarifications entry; an approved
+spec drops back to Draft as usual), then one patch of the engineering page
+sets only that proposal's status and product's decision. Nothing else on the
+engineering page is Prepare for Dev's to change. Open proposals never block
+readiness or approval; they are listed in the verdict.
 
 **3. Readiness.** Calls `doc_gen` with `doc_type: spec-readiness` (once per
 conversation) and applies that checklist to the current spec itself, showing
@@ -135,11 +148,18 @@ independently rewritten.
 ### Rules that apply throughout
 
 - Stays product-level: drifting into technology, data stores, APIs, or
-  architecture gets cut back to the underlying need.
+  architecture gets cut back to the underlying need. Product dependencies
+  are written out in the spec; technical ones are only a link to the
+  engineering page.
 - Never invents current behavior -- grounds the spec in `kb_search` results
   and the documents behind them; gaps become "Questions for Engineering".
-- Every message to the user is in their language; the spec itself is written
-  in the team's spec language (asks once if unsure).
+- Every message to the user is in the language of their own message (not of
+  a title or the spec); the spec itself is written in the team's spec
+  language (asks once if unsure).
+- Calls `ask_user_question` and `confluence_patch_page` in their exact
+  shapes (a `questions` array with one item per call; list-valued `find`/
+  `replace`), which the agent's instructions spell out because loose calls
+  fail validation.
 - Ids (`FR-001`, `SC-001`, three digits, list form not a table) never change
   once published; new items get new ids.
 - **One interruption per step:** `ask_user_question` always goes alone, never
@@ -155,6 +175,7 @@ request in
   -> [stage 0] Understand: kb_search + jira_search, or defer to Plan
   -> [stage 1] Specify: doc_gen(product-spec) -> save as Confluence page (spec-draft)
   -> [stage 2] Clarify: up to 5 Qs/round -> confluence_patch_page
+  -> [stage 2b] Engineering proposals: accept / counter / reject each CP, patch spec + engineering page
   -> [stage 3] Readiness: doc_gen(spec-readiness) verdict -> loop to stage 2 if not ready
   -> [stage 4] Approve: hard gate -> patch Status to Approved, spec-approved label
   -> [stage 5] Project to Jira: Epic + Stories from the approved spec

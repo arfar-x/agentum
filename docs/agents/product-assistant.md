@@ -31,6 +31,7 @@ before handing off.
 | Request is about... | Hands off to |
 |---|---|
 | A product spec or getting work ready for development (spec it, write requirements, clarify/approve/update a spec, create or resync its Jira tickets) | **Prepare for Dev** |
+| An engineer reviewing a spec (technical questions, engineering decisions, contracts between teams, the engineering page, proposing spec changes) | **Engineering Review** |
 | Shaping a raw idea -- challenging it, exploring tradeoffs, before any spec exists | **Plan** |
 | A one-off document that isn't a product spec (PRD, TRD, ADR, RFC) | **Doc Gen** |
 | Jira work outside a spec (create, edit, move, log time on tickets) | **Tasks** |

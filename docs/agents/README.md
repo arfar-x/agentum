@@ -10,10 +10,11 @@ workflow it provides -- not how to edit or import them.
 
 | Agent | What it is |
 |---|---|
-| [Product Assistant](product-assistant.md) | The front door -- a pure router to the other five, answering only quick read-only lookups itself. |
+| [Product Assistant](product-assistant.md) | The front door -- a pure router to the other six, answering only quick read-only lookups itself. |
 | [Plan](plan.md) | Conversational discovery partner that pressure-tests a raw idea before anything is written or built. |
 | [Doc Gen](doc-gen.md) | Generates a single one-off document (PRD/TRD/ADR/RFC/product-spec draft) from a brief; never publishes, never persists state. |
 | [Prepare for Dev](prepare-for-dev.md) | Owns the full product-spec lifecycle: draft -> save to Confluence -> clarify -> readiness -> approve -> project to Jira. |
+| [Engineering Review](engineering-review.md) | For engineers: reviews a spec and keeps its engineering page -- decisions, cross-team contracts, technical questions -- and proposes spec changes for product to decide. |
 | [Tasks](tasks.md) | Reads and creates Jira work items per this team's parent/sub-task conventions. |
 | [Docs manager](docs-manager.md) | Reads and publishes to Confluence outside of a spec flow. |
 
@@ -30,8 +31,11 @@ workflow it provides -- not how to edit or import them.
   true` result means nothing was written yet.
 - **Full tool names only.** Tools are always called by their full
   `..._mcp_agent-skills` / `..._mcp_kb` suffixed names, never the short form.
-- **No code, ever.** Current-behavior grounding comes from specs/docs/Jira/
-  Confluence via the knowledge base, never from reading the repository.
+- **No code for the product side.** Current-behavior grounding comes from
+  specs/docs/Jira/Confluence via the knowledge base, never from reading the
+  repository. The one exception is Engineering Review, whose users have
+  GitLab access: it may read the repository (read-only, a handful of calls)
+  to check a specific claim the documents leave open.
 
 ## Handoff map
 
@@ -42,7 +46,8 @@ Product Assistant (router)
  │     └─> Prepare for Dev (shaped idea -> spec + tickets)
  ├─> Doc Gen            (one-off PRD/TRD/ADR/RFC)
  │     └─(suggests)-> Prepare for Dev (if the doc is really a spec)
- ├─> Prepare for Dev    (spec lifecycle: draft -> clarify -> ready -> approve -> Jira)
+ ├─> Prepare for Dev    (spec lifecycle: draft -> clarify -> engineering proposals -> ready -> approve -> Jira)
+ ├─> Engineering Review (engineers: engineering page, contracts, change proposals)
  ├─> Tasks              (Jira work outside a spec)
  └─> Docs manager       (Confluence work outside a spec)
 ```
