@@ -49,3 +49,6 @@ __pycache__/
 
 # the agent gateway's secrets (copy .env.agent-gateway.example)
 .env.agent-gateway
+
+# the gateway's former standalone repository, kept for its history (restore with: mv agent-gateway/.git.standalone agent-gateway/.git)
+agent-gateway/.git.standalone/

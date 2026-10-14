@@ -1,0 +1,33 @@
+# Non-secret settings. Everything here has a default; list only what you change.
+limits:
+  max_steps: 25               # model steps per turn
+  max_corrections: 4          # consecutive model mistakes tolerated before the turn fails
+  approval_ttl_seconds: 900   # how long an approval stays valid
+  pending_ttl_seconds: 86400  # how long a paused turn can be resumed
+  thread_retention_days: 30
+  tool_result_chars: 20000
+  client_prompt_limit_chars: 6000    # a client system prompt longer than this is condensed
+  client_prompt_target_chars: 2500   # ...to about this many characters
+  client_prompt_cache_seconds: 21600 # and the result is reused for this long (renewed on use)
+  client_prompt_cache_entries: 1     # per user; a different client prompt invalidates older ones beyond this
+  requests_per_minute: 120    # per key
+  max_body_bytes: 4000000
+  upstream_retries: 3
+
+# Map an agent tool to the name a client uses for its own equivalent, when the names differ
+# beyond what is normalized automatically (prefixes such as mcp__server__ are already handled).
+aliases: {}
+
+retrieval:
+  server: kb
+  tool: kb_search
+
+# Context window (tokens) reported on /v1/models, by upstream model id. Agents without their own
+# `context_window` use the entry for their model, else MODEL_CONTEXT_TOKENS from the environment.
+models:
+  context_windows: {}
+
+# Question tools a client may declare, and how they want their arguments. The gateway uses one to
+# ask for approvals and answers. Built in: AskUserQuestion, question, ask_user_question, clarify.
+# Add a client's tool by naming a style: questions_options, options_values or questions_choices.
+ask_tools: {}

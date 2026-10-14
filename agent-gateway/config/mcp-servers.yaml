@@ -1,0 +1,24 @@
+# Tool servers the agents can use. Credentials are never stored here: a server lists the variable
+# names it accepts, and values arrive per request (headers) or from the user's stored credentials.
+servers:
+  kb:
+    url: http://mcp-kb:8322/mcp
+    timeout: 30
+  agent-skills:
+    url: http://mcp-agent-skills-gateway:8321/mcp
+    timeout: 90
+    header_prefix: X-Agent-Skills-Env-
+    # A client tool whose name contains one of these words is treated as a stand-in for this
+    # server's tools: it is withheld until the user agrees to use their client's own tools.
+    client_terms: [jira, confluence, atlassian, gitlab, glab]
+    credentials:
+      - JIRA_BASE_URL
+      - JIRA_USERNAME
+      - JIRA_PASSWORD
+      - JIRA_DEFAULT_PROJECT
+      - CONFLUENCE_BASE_URL
+      - CONFLUENCE_USERNAME
+      - CONFLUENCE_PASSWORD
+      - CONFLUENCE_DEFAULT_SPACE
+      - GITLAB_BASE_URL
+      - GITLAB_TOKEN
