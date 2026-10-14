@@ -73,7 +73,7 @@ A self-hosted service that serves configured agents through an OpenAI-compatible
 | id | Requirement | Status |
 |---|---|---|
 | FR-RTE-01 | A model name equal to an agent id MUST select that agent. | planned |
-| FR-RTE-02 | `<agent>:<upstream-model>` MUST select the agent on that upstream model only when the agent allows model override. | planned |
+| FR-RTE-02 | `<agent>:<upstream-model>` MUST select the agent on that upstream model only when the agent allows model override. | done |
 | FR-RTE-03 | Any other model name MUST be forwarded to the upstream with the body untouched. | planned |
 | FR-RTE-04 | Every other `/v1/*` route MUST be proxied to the upstream, streaming. | planned |
 | FR-RTE-05 | `/v1/models` MUST list upstream models and agents, and MUST still list agents when the upstream listing fails. | planned |
@@ -83,9 +83,9 @@ A self-hosted service that serves configured agents through an OpenAI-compatible
 | id | Requirement | Status |
 |---|---|---|
 | FR-AGT-01 | An agent MUST be loaded from a YAML file validated against the agent-file contract; unknown fields MUST be rejected. | planned |
-| FR-AGT-02 | Agent ids MUST match `^[a-z0-9][a-z0-9-]*$` and be unique. | planned |
-| FR-AGT-03 | A handoff target MUST name another loaded agent. | planned |
-| FR-AGT-04 | A client system prompt MUST be combined per `client_system`: `append` (default), `prepend`, or `ignore`. | planned |
+| FR-AGT-02 | Agent ids MUST match `^[a-z0-9][a-z0-9-]*$` and be unique. | done |
+| FR-AGT-03 | A handoff target MUST name another loaded agent. | done |
+| FR-AGT-04 | A client system prompt MUST be combined per `client_system`: `append` (default), `prepend`, or `ignore`. | done |
 | FR-AGT-05 | `${VAR}` references in agent files MUST be resolved from the environment; an unset one MUST fail startup. | planned |
 | FR-AGT-06 | A passthrough request MUST NOT receive agent instructions, tools or retrieval. | planned |
 
@@ -94,8 +94,8 @@ A self-hosted service that serves configured agents through an OpenAI-compatible
 | id | Requirement | Status |
 |---|---|---|
 | FR-PRM-01 | Agent `model_parameters` MUST be defaults for every upstream call. | planned |
-| FR-PRM-02 | Client parameters MUST override defaults only when `allow_client_overrides` is true. | planned |
-| FR-PRM-03 | A parameter in `locked_parameters` MUST keep the agent's value and the request MUST still succeed. | planned |
+| FR-PRM-02 | Client parameters MUST override defaults only when `allow_client_overrides` is true. | done |
+| FR-PRM-03 | A parameter in `locked_parameters` MUST keep the agent's value and the request MUST still succeed. | done |
 | FR-PRM-04 | `n` greater than 1 and `logprobs` on an agent model MUST fail with a 400 naming the parameter. | planned |
 
 ### 5.5 Retrieval — `FR-RET`
@@ -112,8 +112,8 @@ A self-hosted service that serves configured agents through an OpenAI-compatible
 | id | Requirement | Status |
 |---|---|---|
 | FR-TLR-01 | A tool call MUST be routed in order: client tool, gateway with request credentials, gateway with stored credentials, delegate to the client. | planned |
-| FR-TLR-02 | A client tool MUST match an agent tool only by normalized base name or explicit alias. | planned |
-| FR-TLR-03 | Normalization MUST strip `mcp__<server>__`, a `<server>_` prefix and a `_mcp_<server>` suffix. | planned |
+| FR-TLR-02 | A client tool MUST match an agent tool only by normalized base name or explicit alias. | done |
+| FR-TLR-03 | Normalization MUST strip `mcp__<server>__`, a `<server>_` prefix and a `_mcp_<server>` suffix. | done |
 | FR-TLR-04 | A client-run call MUST be returned as ordinary `tool_calls` with the client's own tool name, and its result MUST resume the turn. | planned |
 | FR-TLR-05 | Hidden gateway-run results from the same step MUST be preserved across a client-run call. | planned |
 | FR-TLR-06 | The route MUST be chosen again for every call. | planned |
@@ -122,11 +122,11 @@ A self-hosted service that serves configured agents through an OpenAI-compatible
 
 | id | Requirement | Status |
 |---|---|---|
-| FR-CRD-01 | Request-supplied credentials MUST take precedence over stored ones, per variable. | planned |
+| FR-CRD-01 | Request-supplied credentials MUST take precedence over stored ones, per variable. | done |
 | FR-CRD-02 | Stored credentials MUST be encrypted at rest. | planned |
 | FR-CRD-03 | A user's credentials MUST NOT be usable by another user. | planned |
 | FR-CRD-04 | Credentials MUST NOT appear in logs, errors, activity notes or model context. | planned |
-| FR-CRD-05 | Only variables a tool server declares MUST be forwarded to it. | planned |
+| FR-CRD-05 | Only variables a tool server declares MUST be forwarded to it. | done |
 
 ### 5.8 Approval — `FR-APR`
 
