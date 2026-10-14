@@ -95,7 +95,7 @@ Paths are relative to `agent-gateway/` unless they start with `/` (repo root). `
 **Independent test**: reject then approve; tampered/reused/expired/foreign code refusals.
 
 - [ ] T080 [P] [US5] `domain/approval.py`: HMAC code bound to (user, call, tool, args hash, expiry); verify; single-use semantics
-- [ ] T081 [P] [US5] `domain/askTools.py` → `domain/interaction.py`: ask-tool registry (name, argument template, answer parser) loaded from `gateway.yaml`
+- [ ] T081 [P] [US5] `domain/interaction.py`: ask-tool registry (name, argument template, answer parser) loaded from `gateway.yaml`
 - [ ] T082 [US5] Approval node: preview via client ask tool when declared, else text with code; strip model-supplied `confirm`; add it only on the approved exact call
 - [ ] T083 [US5] `application/use_cases/resume.py`: resume on tool result or `approve|reject <code>`; atomic consume
 - [ ] T084 [US5] Tests incl. client-run writes untouched (FR-017)
@@ -140,3 +140,11 @@ Setup → Foundational → US2 → US1 → (US3, US7 parallel) → US4 → US5 �
 ## Strategy
 
 MVP = Phases 1–5 (passthrough, agent chat, retrieval). Then tool routing and approval, handoffs, Responses, operations, wiring. Each phase ends with its spec rows flipped to `done` and tests green.
+
+## Amendments from analysis (2026-10-14)
+
+- T018/T019: `pending_turns.hidden_messages` is Fernet-encrypted and rows carry a short TTL (S1).
+- T016: `gateway.yaml` carries defaults for approval expiry, thread retention, rate limits, request size, loop-attempt limit (A1).
+- T002: `docs/spec.md` includes a traceability table from this spec's FR/SC ids to its own (I2).
+- T070a: spike confirming per-call credential headers reach the tool server before T072 (S2).
+- T110 adds a restart-survival test (FR-025); T033 adds a passthrough latency check (SC-003); T111 names the request-size test (FR-024).
