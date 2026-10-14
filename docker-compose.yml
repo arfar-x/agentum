@@ -397,6 +397,8 @@ services:
       UPSTREAM_BASE_URL: ${VLLM_BASE_URL:?set VLLM_BASE_URL in .env}
       UPSTREAM_API_KEY: ${VLLM_API_KEY:-}
       DEFAULT_MODEL: ${VLLM_DEFAULT_MODEL:?set VLLM_DEFAULT_MODEL in .env}
+      # Reported on /v1/models so clients can size their own budgets.
+      MODEL_CONTEXT_TOKENS: ${MODEL_CONTEXT_TOKENS:-262144}
       REDIS_URL: redis://gateway-redis:6379/0
       GATEWAY_PORT: "8080"
     ports:
