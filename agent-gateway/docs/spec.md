@@ -62,21 +62,21 @@ A self-hosted service that serves configured agents through an OpenAI-compatible
 | id | Requirement | Status |
 |---|---|---|
 | FR-API-01 | The service MUST expose `GET /v1/models`, `POST /v1/chat/completions` and `POST /v1/responses` in OpenAI's request and response shapes. | planned |
-| FR-API-02 | Errors MUST use OpenAI's error object and matching status codes. | planned |
-| FR-API-03 | A streamed agent response MUST use server-sent events in OpenAI's chunk shape and end with `[DONE]`. | planned |
-| FR-API-04 | `usage` on an agent response MUST be the sum over every upstream call made for the request, and `stream_options.include_usage` MUST be honoured. | planned |
-| FR-API-05 | An agent response `model` MUST echo the requested model name. | planned |
-| FR-API-06 | `GET /healthz` MUST answer without authentication. | planned |
+| FR-API-02 | Errors MUST use OpenAI's error object and matching status codes. | done |
+| FR-API-03 | A streamed agent response MUST use server-sent events in OpenAI's chunk shape and end with `[DONE]`. | done |
+| FR-API-04 | `usage` on an agent response MUST be the sum over every upstream call made for the request, and `stream_options.include_usage` MUST be honoured. | done |
+| FR-API-05 | An agent response `model` MUST echo the requested model name. | done |
+| FR-API-06 | `GET /healthz` MUST answer without authentication. | done |
 
 ### 5.2 Routing and passthrough — `FR-RTE`
 
 | id | Requirement | Status |
 |---|---|---|
-| FR-RTE-01 | A model name equal to an agent id MUST select that agent. | planned |
+| FR-RTE-01 | A model name equal to an agent id MUST select that agent. | done |
 | FR-RTE-02 | `<agent>:<upstream-model>` MUST select the agent on that upstream model only when the agent allows model override. | done |
-| FR-RTE-03 | Any other model name MUST be forwarded to the upstream with the body untouched. | planned |
-| FR-RTE-04 | Every other `/v1/*` route MUST be proxied to the upstream, streaming. | planned |
-| FR-RTE-05 | `/v1/models` MUST list upstream models and agents, and MUST still list agents when the upstream listing fails. | planned |
+| FR-RTE-03 | Any other model name MUST be forwarded to the upstream with the body untouched. | done |
+| FR-RTE-04 | Every other `/v1/*` route MUST be proxied to the upstream, streaming. | done |
+| FR-RTE-05 | `/v1/models` MUST list upstream models and agents, and MUST still list agents when the upstream listing fails. | done |
 
 ### 5.3 Agent definition — `FR-AGT`
 
@@ -87,7 +87,7 @@ A self-hosted service that serves configured agents through an OpenAI-compatible
 | FR-AGT-03 | A handoff target MUST name another loaded agent. | done |
 | FR-AGT-04 | A client system prompt MUST be combined per `client_system`: `append` (default), `prepend`, or `ignore`. | done |
 | FR-AGT-05 | `${VAR}` references in agent files MUST be resolved from the environment; an unset one MUST fail startup. | done |
-| FR-AGT-06 | A passthrough request MUST NOT receive agent instructions, tools or retrieval. | planned |
+| FR-AGT-06 | A passthrough request MUST NOT receive agent instructions, tools or retrieval. | done |
 
 ### 5.4 Parameters — `FR-PRM`
 
@@ -96,7 +96,7 @@ A self-hosted service that serves configured agents through an OpenAI-compatible
 | FR-PRM-01 | Agent `model_parameters` MUST be defaults for every upstream call. | done |
 | FR-PRM-02 | Client parameters MUST override defaults only when `allow_client_overrides` is true. | done |
 | FR-PRM-03 | A parameter in `locked_parameters` MUST keep the agent's value and the request MUST still succeed. | done |
-| FR-PRM-04 | `n` greater than 1 and `logprobs` on an agent model MUST fail with a 400 naming the parameter. | planned |
+| FR-PRM-04 | `n` greater than 1 and `logprobs` on an agent model MUST fail with a 400 naming the parameter. | done |
 
 ### 5.5 Retrieval — `FR-RET`
 
@@ -149,7 +149,7 @@ A self-hosted service that serves configured agents through an OpenAI-compatible
 | FR-HND-03 | A conversation whose history cannot be matched MUST start a fresh thread from the visible messages and MUST NOT error. | done |
 | FR-ACT-01 | The system prompt MUST contain the activity instruction block unless the agent sets `activity: quiet`. | done |
 | FR-ACT-02 | Gateway-side events MUST be emitted as `reasoning_content`, never inside `content`. | done |
-| FR-ACT-03 | No behaviour MAY depend on request headers that identify the client. | planned |
+| FR-ACT-03 | No behaviour MAY depend on request headers that identify the client. | done |
 | FR-ACT-04 | Long gateway-run tool calls MUST keep a stream alive. | planned |
 
 ### 5.10 Self-correction — `FR-COR`
@@ -166,12 +166,12 @@ A self-hosted service that serves configured agents through an OpenAI-compatible
 
 | id | Requirement | Status |
 |---|---|---|
-| FR-AUT-01 | Every route except `/healthz` MUST require a valid bearer key. | planned |
+| FR-AUT-01 | Every route except `/healthz` MUST require a valid bearer key. | done |
 | FR-AUT-02 | Keys MUST be stored hashed and shown once at creation. | done |
 | FR-AUT-03 | Revocation MUST take effect on the next request. | done |
 | FR-AUT-04 | Threads, pending turns and credentials MUST be read only with the owning user's id. | done |
-| FR-AUT-05 | Requests per key MUST be rate-limited; over the limit MUST return 429. | planned |
-| FR-AUT-06 | Request bodies over the configured size MUST be refused. | planned |
+| FR-AUT-05 | Requests per key MUST be rate-limited; over the limit MUST return 429. | done |
+| FR-AUT-06 | Request bodies over the configured size MUST be refused. | done |
 
 ### 5.12 Operation — `FR-OPS`
 
