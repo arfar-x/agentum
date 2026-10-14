@@ -33,6 +33,8 @@ holds the specification of record for anything large enough to design before bui
 - Spec Kit feature directories (`specs/NNN-*/`) are working documents for one change. Whatever
   they decide about `kb/` MUST also be written into `kb/docs/SPEC.md`, and about
   `agent-gateway/` into `agent-gateway/docs/spec.md`, before the change is complete.
+  `agent-gateway/` keeps its own Spec Kit directories under `agent-gateway/specs/`, so they
+  travel with the module.
 
 Rationale: the code follows the spec. When the two disagree, one of them is wrong, and only a
 written spec makes that visible in review.
