@@ -196,9 +196,9 @@ substitute. A module's own services are in its `compose.yaml`
   It reaches `mcp-kb` through `gateway-kb` and **never joins `backend`**. It is a self-contained
   module, written to become its own repository: its agents, tool servers and limits are in
   `agent-gateway/config/`, its spec is `agent-gateway/docs/spec.md`, and `agent-gateway/AGENTS.md`
-  governs inside it. Per tool call, the user's own client runs the tool when it has an
-  equivalent; otherwise the gateway uses credentials sent on the request, then the user's stored
-  ones (encrypted with `CREDS_KEY` from `.env.agent-gateway`).
+  governs inside it. The agent's own tools take precedence: the gateway runs them with credentials sent on the
+  request, then the user's stored ones (encrypted with `CREDS_KEY` from `.env.agent-gateway`); only
+  when it has none does the user's own client run an equivalent tool it declares.
 - `admin-panel` is a separate service (ClickHouse's LibreChat Admin
   Panel) that talks to `api`'s `/api/admin/*` endpoints -- it has no
   database access of its own and cannot grant itself privileges.
