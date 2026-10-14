@@ -1,0 +1,23 @@
+# JSON-schema-like description of agent-gateway/config/agents/<id>.yaml
+version: 1                       # required, must be 1
+id: string                       # required
+name: string                     # required
+description: string
+model: string                    # may use ${ENV}
+model_parameters: {}             # free-form OpenAI parameters
+allow_client_overrides: bool     # default true
+locked_parameters: [string]
+allow_model_override: bool       # default true
+client_system: append|prepend|ignore
+client_tools: all|none|[string]
+instructions: string             # required
+tools:
+  - server: string               # key in mcp-servers.yaml
+    include: [glob]
+    approval: [glob]             # subset of include; gateway-run calls need approval
+interaction: [ask_user]
+preretrieval:
+  kb: {enabled: bool, limit: int, types: [string], query_rewrite: bool}
+handoffs:
+  - {to: string, description: string}
+activity: narrate|quiet
