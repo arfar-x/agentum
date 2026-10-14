@@ -93,7 +93,7 @@ A self-hosted service that serves configured agents through an OpenAI-compatible
 
 | id | Requirement | Status |
 |---|---|---|
-| FR-PRM-01 | Agent `model_parameters` MUST be defaults for every upstream call. | planned |
+| FR-PRM-01 | Agent `model_parameters` MUST be defaults for every upstream call. | done |
 | FR-PRM-02 | Client parameters MUST override defaults only when `allow_client_overrides` is true. | done |
 | FR-PRM-03 | A parameter in `locked_parameters` MUST keep the agent's value and the request MUST still succeed. | done |
 | FR-PRM-04 | `n` greater than 1 and `logprobs` on an agent model MUST fail with a 400 naming the parameter. | planned |
@@ -102,21 +102,21 @@ A self-hosted service that serves configured agents through an OpenAI-compatible
 
 | id | Requirement | Status |
 |---|---|---|
-| FR-RET-01 | When `preretrieval.kb.enabled`, catalog hits for the latest user message MUST be in context before the model's first step of the turn. | planned |
-| FR-RET-02 | A catalog failure MUST NOT fail the turn; the model MUST be told the catalog was unavailable. | planned |
-| FR-RET-03 | With retrieval disabled no catalog call MAY be made. | planned |
-| FR-RET-04 | Retrieval MUST NOT run again on the continuation of a turn that is resuming tool results. | planned |
+| FR-RET-01 | When `preretrieval.kb.enabled`, catalog hits for the latest user message MUST be in context before the model's first step of the turn. | done |
+| FR-RET-02 | A catalog failure MUST NOT fail the turn; the model MUST be told the catalog was unavailable. | done |
+| FR-RET-03 | With retrieval disabled no catalog call MAY be made. | done |
+| FR-RET-04 | Retrieval MUST NOT run again on the continuation of a turn that is resuming tool results. | done |
 
 ### 5.6 Tool routing — `FR-TLR`
 
 | id | Requirement | Status |
 |---|---|---|
-| FR-TLR-01 | A tool call MUST be routed in order: client tool, gateway with request credentials, gateway with stored credentials, delegate to the client. | planned |
+| FR-TLR-01 | A tool call MUST be routed in order: client tool, gateway with request credentials, gateway with stored credentials, delegate to the client. | done |
 | FR-TLR-02 | A client tool MUST match an agent tool only by normalized base name or explicit alias. | done |
 | FR-TLR-03 | Normalization MUST strip `mcp__<server>__`, a `<server>_` prefix and a `_mcp_<server>` suffix. | done |
-| FR-TLR-04 | A client-run call MUST be returned as ordinary `tool_calls` with the client's own tool name, and its result MUST resume the turn. | planned |
-| FR-TLR-05 | Hidden gateway-run results from the same step MUST be preserved across a client-run call. | planned |
-| FR-TLR-06 | The route MUST be chosen again for every call. | planned |
+| FR-TLR-04 | A client-run call MUST be returned as ordinary `tool_calls` with the client's own tool name, and its result MUST resume the turn. | done |
+| FR-TLR-05 | Hidden gateway-run results from the same step MUST be preserved across a client-run call. | done |
+| FR-TLR-06 | The route MUST be chosen again for every call. | done |
 
 ### 5.7 Credentials — `FR-CRD`
 
@@ -132,23 +132,23 @@ A self-hosted service that serves configured agents through an OpenAI-compatible
 
 | id | Requirement | Status |
 |---|---|---|
-| FR-APR-01 | A gateway-run call matching an `approval` glob MUST NOT execute until the user approves it. | planned |
-| FR-APR-02 | The approval preview MUST state the tool and its arguments. | planned |
-| FR-APR-03 | When the client declares a known ask tool, the prompt MUST be emitted through it. | planned |
-| FR-APR-04 | Otherwise the prompt MUST be text with a code bound to user, conversation, tool and arguments hash, single-use and expiring. | planned |
-| FR-APR-05 | An altered, reused, expired or foreign code MUST be refused with no effect. | planned |
-| FR-APR-06 | The model MUST NOT be able to supply `confirm`; the gateway MUST add it only on the approved exact call. | planned |
-| FR-APR-07 | A rejected approval MUST return "declined" to the model and execute nothing. | planned |
+| FR-APR-01 | A gateway-run call matching an `approval` glob MUST NOT execute until the user approves it. | done |
+| FR-APR-02 | The approval preview MUST state the tool and its arguments. | done |
+| FR-APR-03 | When the client declares a known ask tool, the prompt MUST be emitted through it. | done |
+| FR-APR-04 | Otherwise the prompt MUST be text with a code bound to user, conversation, tool and arguments hash, single-use and expiring. | done |
+| FR-APR-05 | An altered, reused, expired or foreign code MUST be refused with no effect. | done |
+| FR-APR-06 | The model MUST NOT be able to supply `confirm`; the gateway MUST add it only on the approved exact call. | done |
+| FR-APR-07 | A rejected approval MUST return "declined" to the model and execute nothing. | done |
 
 ### 5.9 Handoffs and activity — `FR-HND`, `FR-ACT`
 
 | id | Requirement | Status |
 |---|---|---|
-| FR-HND-01 | Each configured handoff MUST be exposed to the model as a `transfer_to_<id>` tool. | planned |
-| FR-HND-02 | After a handoff, later turns of the same conversation MUST continue with the receiving agent. | planned |
-| FR-HND-03 | A conversation whose history cannot be matched MUST start a fresh thread from the visible messages and MUST NOT error. | planned |
-| FR-ACT-01 | The system prompt MUST contain the activity instruction block unless the agent sets `activity: quiet`. | planned |
-| FR-ACT-02 | Gateway-side events MUST be emitted as `reasoning_content`, never inside `content`. | planned |
+| FR-HND-01 | Each configured handoff MUST be exposed to the model as a `transfer_to_<id>` tool. | done |
+| FR-HND-02 | After a handoff, later turns of the same conversation MUST continue with the receiving agent. | done |
+| FR-HND-03 | A conversation whose history cannot be matched MUST start a fresh thread from the visible messages and MUST NOT error. | done |
+| FR-ACT-01 | The system prompt MUST contain the activity instruction block unless the agent sets `activity: quiet`. | done |
+| FR-ACT-02 | Gateway-side events MUST be emitted as `reasoning_content`, never inside `content`. | done |
 | FR-ACT-03 | No behaviour MAY depend on request headers that identify the client. | planned |
 | FR-ACT-04 | Long gateway-run tool calls MUST keep a stream alive. | planned |
 
@@ -156,10 +156,10 @@ A self-hosted service that serves configured agents through an OpenAI-compatible
 
 | id | Requirement | Status |
 |---|---|---|
-| FR-COR-01 | A call to an unknown tool MUST return a concise correction listing valid tools. | planned |
-| FR-COR-02 | Invalid tool-argument JSON or a schema violation MUST return a concise correction naming the problem. | planned |
-| FR-COR-03 | An empty model reply MUST trigger one correction attempt. | planned |
-| FR-COR-04 | Corrections MUST be bounded; exhaustion MUST produce a standard error. | planned |
+| FR-COR-01 | A call to an unknown tool MUST return a concise correction listing valid tools. | done |
+| FR-COR-02 | Invalid tool-argument JSON or a schema violation MUST return a concise correction naming the problem. | done |
+| FR-COR-03 | An empty model reply MUST trigger one correction attempt. | done |
+| FR-COR-04 | Corrections MUST be bounded; exhaustion MUST produce a standard error. | done |
 | FR-COR-05 | Transient upstream failures MUST be retried with backoff before surfacing. | planned |
 
 ### 5.11 Authentication and tenancy — `FR-AUT`
@@ -196,7 +196,7 @@ A self-hosted service that serves configured agents through an OpenAI-compatible
 |---|---|---|
 | NFR-ARC-01 | `domain/` and `application/` MUST NOT import I/O, web, agent-runtime or YAML libraries. | done |
 | NFR-ARC-02 | `domain/` MUST NOT depend on `application/`. | done |
-| NFR-ARC-03 | Use cases MUST be provable with in-memory fakes. | planned |
-| NFR-ARC-04 | The application core MUST take a neutral turn request, independent of HTTP. | planned |
+| NFR-ARC-03 | Use cases MUST be provable with in-memory fakes. | done |
+| NFR-ARC-04 | The application core MUST take a neutral turn request, independent of HTTP. | done |
 
 *planned* = specified, not built. *partial* = domain and application exist, adapter wiring does not. *done* = built and claimed by a test.
