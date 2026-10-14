@@ -58,7 +58,9 @@ services:
       KB_DATABASE_URL: postgresql://kb_reader:${KB_READER_PASSWORD:?set KB_READER_PASSWORD in kb/.env}@kb-db:5432/${KB_POSTGRES_DB:-agentflow_kb}
       KB_MCP_HOST: 0.0.0.0
       KB_MCP_PORT: "8322"
-    networks: [backend]
+    # gateway-kb lets the agent gateway (profile `gateway`) read the catalog
+    # without joining `backend`. Harmless when the gateway is not running.
+    networks: [backend, gateway-kb]
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }

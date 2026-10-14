@@ -16,7 +16,7 @@ TIMESTAMP="$(date -u +%Y%m%d-%H%M%S)"
 OUT_DIR="${1:-backups/${TIMESTAMP}}"
 mkdir -p "${OUT_DIR}"
 
-VOLUMES=(mongodb_data pgvector_data kb_data meili_data librechat_uploads librechat_images librechat_logs)
+VOLUMES=(mongodb_data pgvector_data kb_data meili_data librechat_uploads librechat_images librechat_logs gateway_db_data)
 COMPOSE_PROJECT="$(basename "$(pwd)")"
 
 echo "Backing up to ${OUT_DIR}/"
@@ -41,6 +41,13 @@ if [ -f .env ]; then
   echo "  .env -> ${OUT_DIR}/.env (contains secrets -- store this backup securely)"
 else
   echo "  WARNING: no .env found to back up" >&2
+fi
+# The agent gateway's Fernet key encrypts the credentials and paused turns stored in
+# gateway_db_data; the database restored next to a different key cannot be read.
+if [ -f .env.agent-gateway ]; then
+  cp .env.agent-gateway "${OUT_DIR}/.env.agent-gateway"
+  chmod 600 "${OUT_DIR}/.env.agent-gateway"
+  echo "  .env.agent-gateway -> ${OUT_DIR}/.env.agent-gateway (contains secrets -- store this backup securely)"
 fi
 
 # Module env files: <module>/.env (the tracked template is .env.example).

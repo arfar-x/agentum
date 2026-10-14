@@ -46,3 +46,6 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 .venv/
+
+# the agent gateway's secrets (copy .env.agent-gateway.example)
+.env.agent-gateway

@@ -37,6 +37,13 @@ networks:
   # network with it. On `backend` any of a dozen containers (searxng, rag_api,
   # ...) could send those headers and read any user's uploads.
   agent-tools:
+  # The agent gateway's own networks (profile `gateway`). It is the one service besides `api`
+  # that external clients reach, so it must not share a network with anything that trusts its
+  # callers by reachability: it never joins `backend`. Its tool server and its stores each sit
+  # on a network only it joins, and mcp-kb is reachable to it through gateway-kb alone.
+  gateway-tools:
+  gateway-kb:
+  gateway-data:
 
 volumes:
   mongodb_data:
@@ -45,6 +52,7 @@ volumes:
   librechat_uploads:
   librechat_images:
   librechat_logs:
+  gateway_db_data:
 
 services:
   api:
@@ -364,3 +372,114 @@ services:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
     mem_limit: 256m
+
+  # ---- agent gateway (profile `gateway`; `make gateway-up`) -----------------------------------
+  # Serves the agents through an OpenAI-compatible API to clients outside LibreChat. See
+  # agent-gateway/README.md. It publishes one port, authenticates every request with a key it
+  # issued, and reaches only its own database, its own Redis, the catalog (read-only) and its
+  # own tool server.
+  agent-gateway:
+    profiles: [gateway]
+    build:
+      context: ./agent-gateway
+    restart: unless-stopped
+    depends_on:
+      gateway-db:
+        condition: service_healthy
+      gateway-redis:
+        condition: service_healthy
+      mcp-agent-skills-gateway:
+        condition: service_healthy
+    env_file:
+      - path: .env.agent-gateway
+        required: false
+    environment:
+      UPSTREAM_BASE_URL: ${VLLM_BASE_URL:?set VLLM_BASE_URL in .env}
+      UPSTREAM_API_KEY: ${VLLM_API_KEY:-}
+      DEFAULT_MODEL: ${VLLM_DEFAULT_MODEL:?set VLLM_DEFAULT_MODEL in .env}
+      REDIS_URL: redis://gateway-redis:6379/0
+      GATEWAY_PORT: "8080"
+    ports:
+      # Reached by clients on other machines. Terminate TLS in front of it, or bind
+      # 127.0.0.1 here and put a reverse proxy on the host.
+      - "${GATEWAY_PUBLISHED_PORT:-8080}:8080"
+    volumes:
+      - ./agent-gateway/config:/etc/agent-gateway:ro
+    networks: [gateway-tools, gateway-kb, gateway-data]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    mem_limit: 512m
+
+  # The gateway's tool server: the same agent-skills image as mcp-agent-skills, on a network only
+  # the gateway joins. It has no upload volume and is never told which user is calling, so
+  # attachments are off here -- files go through the tools' content arguments instead.
+  mcp-agent-skills-gateway:
+    profiles: [gateway]
+    build:
+      context: ./agent-skills
+      dockerfile: mcp-server/Dockerfile
+      args:
+        TOOLSETS: ${MCP_TOOLSETS:-jira}
+    restart: unless-stopped
+    environment:
+      JIRA_AUTO_CONFIRM_WRITES: ${JIRA_AUTO_CONFIRM_WRITES:-false}
+      JIRA_DEPLOYMENT_TYPE: ${JIRA_DEPLOYMENT_TYPE:-}
+      CONFLUENCE_AUTO_CONFIRM_WRITES: ${CONFLUENCE_AUTO_CONFIRM_WRITES:-false}
+      CONFLUENCE_DEPLOYMENT_TYPE: ${CONFLUENCE_DEPLOYMENT_TYPE:-}
+      GITLAB_AUTO_CONFIRM_WRITES: ${GITLAB_AUTO_CONFIRM_WRITES:-false}
+      # Trusting per-request credential headers is safe here for the same reason as on
+      # mcp-agent-skills: no published port, and only agent-gateway shares its network.
+      MCP_TRUST_REQUEST_CREDENTIALS: "1"
+      MCP_UNSET_HEADER_VALUE: "-"
+    networks: [gateway-tools]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import socket; socket.create_connection(('127.0.0.1', 8321), timeout=3)"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    mem_limit: 512m
+
+  gateway-db:
+    profiles: [gateway]
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file:
+      - path: .env.agent-gateway
+        required: false
+    environment:
+      POSTGRES_DB: gateway
+      POSTGRES_USER: gateway
+    volumes:
+      - gateway_db_data:/var/lib/postgresql/data
+    networks: [gateway-data]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gateway -d gateway"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    mem_limit: 512m
+
+  gateway-redis:
+    profiles: [gateway]
+    image: redis:7.4.7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    networks: [gateway-data]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    mem_limit: 128m

@@ -103,6 +103,26 @@ Run this pair once, deliberately, against a disposable copy before you
 actually need it in an emergency -- confirming a backup script works is the
 only way to know it works.
 
+## Agent gateway
+
+Optional (compose profile `gateway`); `make up` does not start it.
+
+1. `cp .env.agent-gateway.example .env.agent-gateway`, fill in `POSTGRES_PASSWORD`,
+   `DATABASE_URL` (same password), `CREDS_KEY` and `APPROVAL_SECRET`, then `chmod 600` it.
+2. `make gateway-up`. The model it calls is `VLLM_BASE_URL` / `VLLM_DEFAULT_MODEL` from `.env`.
+3. `make gateway-key-create USER=person@example.org` prints that person's key once. Revoke with
+   `make gateway-key-revoke KEY_ID=...`; it takes effect on their next request.
+4. Terminate TLS in front of the published port (`GATEWAY_PUBLISHED_PORT`, default 8080) or bind
+   it to 127.0.0.1 and use a reverse proxy.
+
+Agents, tool servers and limits are files under `agent-gateway/config/`; restart the service after
+editing. A startup error names the file and the problem.
+
+`CREDS_KEY` encrypts the credentials and paused turns in `gateway_db_data`. `make backup` saves
+`.env.agent-gateway` beside the volume; restore them together, or stored credentials become
+unreadable (users re-enter them with `make gateway-creds-set`). Keys, threads and stored
+credentials live only in that database.
+
 ## Knowledge base migrations
 
 Schema changes live in `kb/migrations/` and are applied by `make kb-init`, which

@@ -11,7 +11,7 @@ include kb/module.mk
 
 .PHONY: help bootstrap up down restart ps logs build secrets backup restore test \
 	render-config librechat-migrate user-create user-list user-ban user-delete user-invite user-reset-password \
-	agent-export agent-import
+	agent-export agent-import gateway-up gateway-down gateway-test gateway-key-create gateway-key-list gateway-key-revoke gateway-creds-set
 
 help: ## Show this list
 	@grep -hE '^[a-zA-Z0-9_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -105,3 +105,25 @@ agent-export: ## Export every admin-owned agent + its sharing from the database 
 agent-import: ## Sync agents/*.yaml into the database; options: DRY_RUN=1 OWNER_EMAIL= MODEL_PROVIDER= MODEL_NAME= ALLOW_RENAME=1
 	DRY_RUN=$(DRY_RUN) OWNER_EMAIL=$(OWNER_EMAIL) MODEL_PROVIDER=$(MODEL_PROVIDER) MODEL_NAME=$(MODEL_NAME) \
 		ALLOW_RENAME=$(ALLOW_RENAME) scripts/agents.sh import
+
+gateway-up: ## Start the agent gateway (needs .env.agent-gateway; see agent-gateway/README.md)
+	@test -f .env.agent-gateway || { echo "copy .env.agent-gateway.example to .env.agent-gateway and fill it in"; exit 1; }
+	docker compose --profile gateway up -d --build agent-gateway
+
+gateway-down: ## Stop the agent gateway and its stores (volumes are kept)
+	docker compose --profile gateway stop agent-gateway mcp-agent-skills-gateway gateway-db gateway-redis
+
+gateway-test: ## Run the gateway's suite, including the Postgres/Redis tests, in throwaway containers
+	cd agent-gateway && . .venv/bin/activate && python -m pytest -q && scripts/test-services.sh -q
+
+gateway-key-create: ## Issue an API key, e.g. `make gateway-key-create USER=alice@example.org`
+	docker compose exec agent-gateway python -m agent_gateway key create $(USER)
+
+gateway-key-list: ## List gateway API keys
+	docker compose exec agent-gateway python -m agent_gateway key list
+
+gateway-key-revoke: ## Revoke a key, e.g. `make gateway-key-revoke KEY_ID=...`
+	docker compose exec agent-gateway python -m agent_gateway key revoke $(KEY_ID)
+
+gateway-creds-set: ## Store a credential for a user: `make gateway-creds-set USER=a@b SERVER=agent-skills VAR=JIRA_PASSWORD`
+	docker compose exec agent-gateway python -m agent_gateway creds set $(USER) $(SERVER) $(VAR)

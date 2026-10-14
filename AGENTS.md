@@ -187,6 +187,18 @@ substitute. A module's own services are in its `compose.yaml`
   the catalog, and `kb` never holds a credential to LibreChat's data. Schema and
   the least-privilege query role come from `make kb-init` (idempotent; also how
   a later migration is applied). Backed up like every other volume.
+- `agent-gateway` (profile `gateway`, `make gateway-up`) serves the same kind of agents to
+  clients outside LibreChat through an OpenAI-compatible API (Chat Completions, Responses,
+  Models; any other model name or route goes to the upstream model untouched). It is the second
+  service with a published port, so every request needs a key it issued (`make gateway-key-*`).
+  It has its own Postgres and Redis (`gateway-db`, `gateway-redis`) and its own copy of the
+  agent-skills server (`mcp-agent-skills-gateway`) on a `gateway-tools` network only it joins.
+  It reaches `mcp-kb` through `gateway-kb` and **never joins `backend`**. It is a self-contained
+  module, written to become its own repository: its agents, tool servers and limits are in
+  `agent-gateway/config/`, its spec is `agent-gateway/docs/spec.md`, and `agent-gateway/AGENTS.md`
+  governs inside it. Per tool call, the user's own client runs the tool when it has an
+  equivalent; otherwise the gateway uses credentials sent on the request, then the user's stored
+  ones (encrypted with `CREDS_KEY` from `.env.agent-gateway`).
 - `admin-panel` is a separate service (ClickHouse's LibreChat Admin
   Panel) that talks to `api`'s `/api/admin/*` endpoints -- it has no
   database access of its own and cannot grant itself privileges.
@@ -286,6 +298,8 @@ it.
   `application/` -> `adapters/`), specified by
   [`kb/docs/SPEC.md`](kb/docs/SPEC.md); see
   [`kb/README.md`](kb/README.md) to run it.
+- `agent-gateway/` -- the OpenAI-compatible agent gateway (see Architecture); its own repository
+  and docs: [`agent-gateway/README.md`](agent-gateway/README.md).
 - `agent-skills/` -- git submodule, pinned to a tag (see Architecture
   above); has its own `AGENTS.md` and `AUTHENTICATION.md` governing that
   subtree.
