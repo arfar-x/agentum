@@ -82,6 +82,7 @@ describe('FormEditorModal', () => {
     await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
     expect(calls[0]!.method).toBe('PUT');
+    expect(calls[0]!.body).toMatchObject({ expected_revision: 1 });
   });
 
   it('shows the server’s reason when it refuses', async () => {

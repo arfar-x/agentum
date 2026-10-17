@@ -228,3 +228,31 @@ def json_bytes(payload) -> bytes:
     import json
 
     return json.dumps(payload).encode()
+
+
+def test_a_stale_editor_cannot_overwrite_a_newer_save(client, world):
+    # Covers: FR-ADM-19
+    client.post("/api/forms", json=RECORD, headers=CSRF)
+    first = client.put("/api/forms/release-process", json={**RECORD, "body": "Mine.", "expected_revision": 1}, headers=CSRF)
+    assert first.status_code == 200 and first.json()["record"]["revision"] == 2
+
+    stale = client.put("/api/forms/release-process", json={**RECORD, "body": "Theirs.", "expected_revision": 1}, headers=CSRF)
+    assert stale.status_code == 409 and stale.json()["error"]["type"] == "changed"
+    assert world.forms.get("release-process").body == "Mine."
+
+    current = client.put("/api/forms/release-process", json={**RECORD, "body": "Theirs.", "expected_revision": 2}, headers=CSRF)
+    assert current.status_code == 200
+
+
+def test_a_save_that_says_nothing_about_the_revision_still_works(client):
+    # Covers: FR-ADM-19
+    client.post("/api/forms", json=RECORD, headers=CSRF)
+    assert client.put("/api/forms/release-process", json={**RECORD, "body": "x"}, headers=CSRF).status_code == 200
+    bad = client.put("/api/forms/release-process", json={**RECORD, "expected_revision": "two"}, headers=CSRF)
+    assert bad.status_code == 400
+
+
+def test_a_slug_with_a_trailing_newline_is_not_a_slug(client):
+    # Covers: FR-ADM-12
+    refused = client.post("/api/forms", json={**RECORD, "slug": "release\n"}, headers=CSRF)
+    assert refused.status_code == 400 and "slug" in refused.json()["error"]["message"]

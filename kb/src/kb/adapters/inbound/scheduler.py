@@ -98,6 +98,12 @@ class Scheduler:
         #: thread that keeps beating while a long job holds the tick.
         self._pulse: Heartbeat | None = None
         self._working_on: str | None = None
+        #: The tick thread and the heartbeat thread both write the pulse, over
+        #: one connection; one at a time, so their statements cannot interleave.
+        self._pulse_lock = threading.Lock()
+        #: When the manual records were last found out of step with the catalog
+        #: and published, so a persistent failure is retried, not hammered.
+        self._forms_attempted: datetime | None = None
         # Optional collaborators: a container without them (a unit test of one
         # concern) simply has no history, queue or heartbeat.
         self._runs = getattr(container, "runs", None)
@@ -160,15 +166,17 @@ class Scheduler:
         try:
             config = load(self._sources_file)
             config_error = None
-        except ConfigError as exc:
+        except (ConfigError, OSError, UnicodeDecodeError) as exc:
             # A file being edited right now is the normal case for this, so it
-            # is a warning and a skipped tick, not a crash loop.
+            # is a warning and a skipped tick, not a crash loop. Whatever is
+            # wrong with it, the heartbeat and the request queue still run.
             logger.warning("not scheduling: %s", exc)
             config, config_error = None, str(exc)
 
         self._beat(now, config, config_error)
         # What a person asked for goes first: somebody is waiting on it.
         self._serve_requests(config, config_error)
+        self._publish_pending_forms(now)
         if config is None:
             return []
 
@@ -210,7 +218,8 @@ class Scheduler:
 
     def _write_pulse(self, pulse: Heartbeat) -> None:
         try:
-            self._heartbeats.beat(pulse)
+            with self._pulse_lock:
+                self._heartbeats.beat(pulse)
         except Exception:
             logger.exception("could not write the heartbeat")
 
@@ -399,6 +408,48 @@ class Scheduler:
             ),
             rejected=report.rejected,
             checkpoint=report.checkpoint,
+        )
+
+    #: How often an out-of-step set of manual records is retried.
+    FORMS_RETRY = timedelta(seconds=60)
+
+    def _publish_pending_forms(self, now: datetime) -> None:
+        """Bring the manual records in step with the catalog when a request to do
+        so was lost (a scheduler restarted mid-request, a failed enqueue): the
+        records are the source of truth, and nothing else would ever notice that
+        a save or a delete had not arrived (FR-SRC-07). Checked every tick, cheap
+        when nothing is wrong, and retried at most once a minute when it is."""
+        forms = getattr(self._container, "forms", None)
+        if forms is None or self._elsewhere_running(FORM_SOURCE_ID):
+            return
+        if self._forms_attempted and now - self._forms_attempted < self.FORMS_RETRY:
+            return
+        try:
+            records = {r.slug: r for r in forms.list()}
+            store = self._container.store
+            live = store.ids_for_source(FORM_SOURCE_ID)
+            from kb.domain.identity import entry_id_for
+
+            stale = bool(live - {entry_id_for(FORM_SOURCE_ID, slug) for slug in records})
+            if not stale:
+                for slug, record in records.items():
+                    entry = store.get(entry_id_for(FORM_SOURCE_ID, slug))
+                    if entry is None or entry.deleted_at is not None or entry.source_version != str(record.revision):
+                        stale = True
+                        break
+        except Exception:
+            logger.exception("could not compare the manual records with the catalog")
+            return
+        if not stale:
+            return
+        self._forms_attempted = now
+        logger.info("the manual records are out of step with the catalog; publishing them")
+        self._perform(
+            mechanism=JobKind.FULL_SCRAPE.value,
+            source_id=FORM_SOURCE_ID,
+            config=None,
+            triggered_by=Trigger.SCHEDULED,
+            mode=Mode.FULL.value,
         )
 
     def _publish_forms(self, *, dry_run: bool, forced: bool) -> _Result:

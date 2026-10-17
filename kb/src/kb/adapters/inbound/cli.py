@@ -418,6 +418,11 @@ def _sources_command(args: argparse.Namespace, container: Any) -> dict[str, Any]
         dry_run=args.dry_run,
         forced=args.force,
     )
+    # SIGTERM kills a Python process without unwinding; turn it into an exit so
+    # the run below is closed rather than left `running`.
+    import signal
+
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     try:
         report = container.sync.execute(
             source,
@@ -431,6 +436,12 @@ def _sources_command(args: argparse.Namespace, container: Any) -> dict[str, Any]
     except Exception as exc:  # the source is unreachable, auth failed, ...
         recorder.end(run_id, error=str(exc).strip() or type(exc).__name__)
         raise _Reportable("source_unavailable", str(exc).strip()) from exc
+    except BaseException:
+        # Ctrl-C, or SIGTERM from a container stopping: not an error to report,
+        # but the run must not stay `running` -- a run that never ends blocks
+        # every later sync of this source.
+        recorder.end(run_id, error="interrupted: the command was stopped before it finished")
+        raise
     finally:
         print(file=sys.stderr)  # end the progress line before anything else prints
 

@@ -42,11 +42,12 @@ def start(runs, source="jira", mechanism="incremental", at=T0, **kwargs):
 
 # Covers: FR-SCH-08
 def test_a_run_exists_from_its_start_and_is_judged_when_it_ends(runs):
-    run_id = start(runs)
+    began = datetime.now(timezone.utc)  # "running" only counts while recent
+    run_id = start(runs, at=began)
     assert runs.get_run(run_id).status is RunStatus.RUNNING
     assert runs.running_sources() == {"jira"}
 
-    runs.finish_run(run_id, finished_at=T0 + timedelta(seconds=3), counts={"created": 2, "seen": 2})
+    runs.finish_run(run_id, finished_at=began + timedelta(seconds=3), counts={"created": 2, "seen": 2})
 
     done = runs.get_run(run_id)
     assert done.status is RunStatus.SUCCESS and done.created == 2 and done.duration_ms == 3000
@@ -264,3 +265,10 @@ def test_a_call_cut_off_by_a_restart_fails_and_the_next_one_recovers(store, dsn,
     with pytest.raises(psycopg.OperationalError):
         runs.list_runs(limit=1)
     assert runs.list_runs(limit=1) == []
+
+
+# Covers: FR-SCH-08
+def test_a_run_that_has_been_running_for_a_day_no_longer_blocks_its_source(runs):
+    start(runs, source="wiki", at=datetime.now(timezone.utc) - timedelta(hours=30))
+    start(runs, source="jira", at=datetime.now(timezone.utc) - timedelta(minutes=10))
+    assert runs.running_sources() == {"jira"}

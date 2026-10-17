@@ -297,6 +297,22 @@ noticed and recorded too; **the file always wins**. The file is edited in place,
 which is why `kb-admin` runs as root by default (`KB_ADMIN_USER` changes that);
 if it cannot write the file, the console says so and stays read-only.
 
+**What the console will not write.** The scheduler resolves `${VAR}`
+placeholders and credential variable names from its whole environment -- the
+stack's `.env`, other components' secrets included -- and sends a source's
+credential to the URL the file names. So from the console a placeholder may only
+name a variable ending in `_URL`, `_URI`, `_HOST`, `_ENDPOINT` or `_DOMAIN`, and
+a `token_env` must end in `_TOKEN` or `_PAT` and not belong to another
+component (`KB_ADMIN_*`, `JWT_*`, `CREDS_*`, …). The approval also states which
+credential goes to which server. Anything else is a hand edit of the file on the
+host, which is a deliberate act there. Source ids are not case-sensitive (`Docs`
+and `docs` would write the same entries), and `form` is reserved in any case.
+
+Known limits of the editor: when a change replaces a source's whole
+`mechanisms:` block, comments inside that block are not kept; a file indented in
+a style the editor cannot reproduce (for example `- id:` flush with `sources:`)
+is refused with a parse error rather than rewritten, so edit that one by hand.
+
 **Entries of a source you deleted** stay searchable, because only a sync can
 retire an entry and nothing syncs a deleted source. The console offers to remove
 them when you delete the source, and lists any it finds afterwards. Removal

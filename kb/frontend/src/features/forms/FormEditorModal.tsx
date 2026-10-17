@@ -92,7 +92,7 @@ export function FormEditorModal({ record, languages, entryTypes, summarizerConfi
     setError(null);
     try {
       const input = toInput(form);
-      const { record: saved } = record ? await api.updateForm(record.slug, input) : await api.createForm(input);
+      const { record: saved } = record ? await api.updateForm(record.slug, input, record.revision) : await api.createForm(input);
       toast(`Saved “${saved.slug}”. It is queued to publish; it shows in search after the scheduler’s next tick.`);
       onSaved(saved);
     } catch (err) {

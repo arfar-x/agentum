@@ -104,7 +104,12 @@ class PostgresRunLog(_Base):
 
     def running_sources(self) -> set[str]:
         with self._connection.cursor() as cursor:
-            cursor.execute("SELECT DISTINCT source_id FROM sync_run WHERE status = 'running'")
+            # A run "in progress" for a day is a run whose process is gone and
+            # whose row nothing closed; it must not block its source for ever.
+            cursor.execute(
+                "SELECT DISTINCT source_id FROM sync_run"
+                " WHERE status = 'running' AND started_at > now() - interval '24 hours'"
+            )
             return {row["source_id"] for row in cursor.fetchall()}
 
     def last_scheduled(self) -> dict[str, datetime]:

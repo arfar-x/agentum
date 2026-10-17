@@ -28,6 +28,10 @@ class FormExists(ValueError):
     pass
 
 
+class RecordChanged(RuntimeError):
+    """Saved by someone else since the editor was opened; look again first."""
+
+
 class FormInvalid(ValueError):
     """The record is not acceptable; the message says which field and why."""
 
@@ -62,10 +66,15 @@ class ManageForms:
         self._publish()
         return saved
 
-    def update(self, slug: str, data: Mapping[str, Any]) -> FormRecord:
+    def update(self, slug: str, data: Mapping[str, Any], *, expected_revision: int | None = None) -> FormRecord:
         existing = self._records.get(slug)
         if existing is None:
             raise FormNotFound(slug)
+        if expected_revision is not None and expected_revision != existing.revision:
+            raise RecordChanged(
+                f"this record was saved again (revision {existing.revision}) since you opened it "
+                f"(revision {expected_revision}); reload it so you do not overwrite that"
+            )
         # The slug names the entry and cannot move; everything else may.
         record = self._build({**data, "slug": slug}, created_at=existing.created_at)
         saved = self._records.update(

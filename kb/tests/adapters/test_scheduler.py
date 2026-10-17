@@ -667,3 +667,71 @@ def test_syncing_everything_skips_the_manual_records_when_there_are_none(wired):
     request = serve(container, scheduler, source_id="*", mode="full")
 
     assert [container.runs.get_run(i).source_id for i in request.run_ids] == ["confluence-eng"]
+
+
+def form_runs(container):
+    return [r for r in container.runs.runs if r.source_id == "form"]
+
+
+def test_a_saved_record_whose_request_was_lost_is_published_anyway(wired):
+    # Covers: FR-SRC-07
+    container, store, scheduler, _ = wired
+    with_forms(container)  # saved, and nobody asked for it to be published
+
+    scheduler.tick(NOON)
+
+    assert [e.source_id for e in store.entries.values() if e.source_id == "form"] == ["form"]
+    assert len(form_runs(container)) == 1
+
+
+def test_a_deleted_record_whose_request_was_lost_is_retired_anyway(wired):
+    # Covers: FR-SRC-07
+    container, store, scheduler, _ = wired
+    forms = with_forms(container)
+    scheduler.tick(NOON)
+    forms.delete("glossary")
+
+    scheduler.tick(NOON + timedelta(seconds=90))
+
+    [entry] = [e for e in store.entries.values() if e.source_id == "form"]
+    assert entry.deleted_at is not None
+
+
+def test_records_already_in_step_cost_nothing(wired):
+    # Covers: FR-SRC-07
+    container, _, scheduler, _ = wired
+    with_forms(container)
+    scheduler.tick(NOON)
+    runs = len(form_runs(container))
+
+    scheduler.tick(NOON + timedelta(seconds=90))
+    scheduler.tick(NOON + timedelta(seconds=180))
+
+    assert len(form_runs(container)) == runs
+
+
+def test_records_that_keep_failing_are_retried_slowly_not_every_tick(wired):
+    # Covers: FR-SRC-07
+    container, store, scheduler, _ = wired
+    with_forms(container)
+    container.sync.execute = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("database says no"))
+
+    scheduler.tick(NOON)
+    scheduler.tick(NOON + timedelta(seconds=10))
+    scheduler.tick(NOON + timedelta(seconds=20))
+    assert len(form_runs(container)) == 1, "one attempt, then it waits"
+    scheduler.tick(NOON + timedelta(seconds=75))
+    assert len(form_runs(container)) == 2
+
+
+def test_an_unreadable_sources_file_still_lets_the_scheduler_beat_and_publish(wired):
+    # Covers: FR-SCH-12
+    container, store, scheduler, path = wired
+    with_forms(container)
+    path.write_bytes(b"sources: [\xff\xfe not utf-8")
+
+    scheduler.tick(NOON)
+
+    beat = container.heartbeats.last_beat()
+    assert beat is not None and "UTF-8" in (beat.config_error or "")
+    assert any(e.source_id == "form" for e in store.entries.values())

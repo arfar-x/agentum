@@ -124,3 +124,13 @@ def test_starting_without_a_database_fails_at_once_rather_than_later():
 
     with pytest.raises(psycopg.OperationalError):
         ResilientConnection(refuse)
+
+
+def test_a_connection_in_the_middle_of_a_transaction_is_left_alone():
+    # Covers: NFR-DEP-09
+    resilient, opened, clock = wire(FakeConnection("a", dies_on_ping=True), FakeConnection("b"))
+    opened[0].info = type("Info", (), {"transaction_status": psycopg.pq.TransactionStatus.INTRANS})()
+    clock.now += PING_AFTER_SECONDS + 10
+    assert resilient.cursor() == ("cursor", "a")
+    assert opened[0].queries == [], "no ping inside a transaction"
+    assert len(opened) == 1, "and no replacement"

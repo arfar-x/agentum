@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Annotated, Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from kb.domain.content import (
     DEFAULT_RAW_CONTENT_MAX_BYTES,
@@ -188,7 +188,7 @@ class _BaseSource(BaseModel):
     @field_validator("id")
     @classmethod
     def _id_is_a_usable_slug(cls, value: str) -> str:
-        if value == FORM_SOURCE_ID:
+        if value.casefold() == FORM_SOURCE_ID:
             raise ValueError(f"{FORM_SOURCE_ID!r} is reserved for the built-in manual records")
         if not _SOURCE_ID.match(value):
             raise ValueError("use letters, digits, '.', '_' or '-' (it becomes part of every entry id)")
@@ -286,6 +286,22 @@ class SourcesConfig(BaseModel):
     defaults: "Defaults" = Field(default_factory=lambda: Defaults())
     sources: tuple[AnySource, ...] = ()
 
+    @model_validator(mode="after")
+    def _ids_are_unique(self) -> "SourcesConfig":
+        # Compared without regard to case, because entry ids are lowercased: `Docs`
+        # and `docs` would write the same entries and each full pass would retire
+        # the other's.
+        seen: dict[str, str] = {}
+        for source in self.sources:
+            key = source.id.casefold()
+            if key in seen:
+                raise ValueError(
+                    f"sources {seen[key]!r} and {source.id!r} have the same id "
+                    "(ids are not case-sensitive: each becomes part of every entry id)"
+                )
+            seen[key] = source.id
+        return self
+
     def enabled_sources(self) -> tuple[AnySource, ...]:
         return tuple(source for source in self.sources if source.enabled)
 
@@ -364,7 +380,11 @@ def load(
     location = path or Path(os.environ.get("KB_SOURCES_FILE", DEFAULT_PATH))
     if not location.exists():
         raise ConfigError("file not found -- copy config/kb-sources.yaml.example to it", path=location)
-    return parse(location.read_text(encoding="utf-8"), path=location, env=env, lenient=lenient)
+    try:
+        text = location.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise ConfigError("the file is not valid UTF-8", path=location) from exc
+    return parse(text, path=location, env=env, lenient=lenient)
 
 
 def parse(

@@ -79,8 +79,12 @@ export const api = {
     post<{ request_id: number }>(`/api/sources/${encodeURIComponent(sourceId)}/purge-content`),
   forms: () => get<FormsResponse>('/api/forms'),
   createForm: (record: FormInput) => post<{ record: FormRecord }>('/api/forms', record as unknown as Record<string, unknown>),
-  updateForm: (slug: string, record: FormInput) =>
-    request<{ record: FormRecord }>('PUT', `/api/forms/${encodeURIComponent(slug)}`, record as unknown as Record<string, unknown>),
+  /** `expectedRevision` is the revision the editor opened: the server refuses (409) if the record has moved on. */
+  updateForm: (slug: string, record: FormInput, expectedRevision?: number) =>
+    request<{ record: FormRecord }>('PUT', `/api/forms/${encodeURIComponent(slug)}`, {
+      ...(record as unknown as Record<string, unknown>),
+      ...(expectedRevision === undefined ? {} : { expected_revision: expectedRevision }),
+    }),
   deleteForm: (slug: string) => del<{ deleted: string }>(`/api/forms/${encodeURIComponent(slug)}`),
   draftSummary: (body: { title: Record<string, string>; body: string; type: string }) =>
     post<DraftSummaryResponse>('/api/forms/draft-summary', body),

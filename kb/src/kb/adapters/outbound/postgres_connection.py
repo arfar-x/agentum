@@ -63,7 +63,16 @@ class ResilientConnection:
 
     @classmethod
     def to(cls, dsn: str, *, connect_timeout: int = 5, **kwargs: Any) -> "ResilientConnection":
-        return cls(lambda: psycopg.connect(dsn, connect_timeout=connect_timeout, autocommit=True), **kwargs)
+        # TCP keepalives, so a connection whose far end vanished without a word (a
+        # failover, a firewall that dropped the flow) is noticed in about a
+        # minute instead of blocking a request for ever.
+        return cls(
+            lambda: psycopg.connect(
+                dsn, connect_timeout=connect_timeout, autocommit=True,
+                keepalives=1, keepalives_idle=30, keepalives_interval=10, keepalives_count=3,
+            ),
+            **kwargs,
+        )
 
     # -- keeping a live connection -----------------------------------------
     def _open(self) -> psycopg.Connection:
@@ -76,6 +85,17 @@ class ResilientConnection:
             idle = self._clock() - self._last_used
             self._last_used = self._clock()
             conn = self._conn
+            status = getattr(getattr(conn, "info", None), "transaction_status", None)
+            in_transaction = (
+                psycopg.pq.TransactionStatus.INTRANS,
+                psycopg.pq.TransactionStatus.ACTIVE,
+                psycopg.pq.TransactionStatus.INERROR,
+            )
+            if status in in_transaction:
+                # In the middle of a transaction: the next statement belongs to
+                # it. Pinging would be a statement of its own, and replacing the
+                # connection would move the rest of the transaction elsewhere.
+                return conn
             lost = conn.closed or conn.broken
             if not lost and idle > self._ping_after:
                 try:

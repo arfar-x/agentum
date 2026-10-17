@@ -42,6 +42,7 @@ from kb.application.use_cases.manage_forms import (
     FormExists,
     FormInvalid,
     FormNotFound,
+    RecordChanged,
     publication_state,
 )
 from kb.application.use_cases.request_sync import InvalidRequest, RequestSync
@@ -176,6 +177,8 @@ def build_app(
                 return _error(400, "invalid_record", str(exc))
             except NothingToSummarize as exc:
                 return _error(400, "nothing_to_summarize", str(exc))
+            except RecordChanged as exc:
+                return _error(409, "changed", str(exc))
             except FormExists as exc:
                 return _error(409, "exists", str(exc))
             except FormNotFound:
@@ -193,9 +196,22 @@ def build_app(
             # Lenient: this process has no source credentials, so the variables
             # that carry them cannot be resolved here. The scheduler, which can,
             # is the authority on whether the file is complete.
-            return load(services.sources_file, lenient=True), None
+            # `env={}`: this process's environment is the console's own -- its
+            # database URL, its token, the summarizer's key -- and must never be
+            # what a `${VAR}` in the file resolves to (FR-ADM-15).
+            return load(services.sources_file, lenient=True, env={}), None
         except ConfigError as exc:
             return None, str(exc)
+
+    def approval(loaded: SourcesConfig | None) -> dict[str, Any]:
+        """Whether syncing is on, and why -- as the scheduler sees it where only
+        it can: KB_SOURCES_APPROVED is in its environment, not this one's."""
+        beat = services.heartbeats.last_beat()
+        if beat is not None and beat.approved_from == "environment":
+            return {"value": beat.approved, "from": beat.approved_from}
+        if loaded is not None:
+            return {"value": loaded.approved, "from": loaded.approved_from}
+        return {"value": beat.approved if beat else True, "from": beat.approved_from if beat else "default"}
 
     def known_sources() -> set[str]:
         loaded, _ = config()
@@ -280,14 +296,17 @@ def build_app(
         queued = services.queue.list_requests(statuses=[RequestStatus.QUEUED], limit=200)
         running = services.queue.list_requests(statuses=[RequestStatus.RUNNING], limit=200)
         # The file is fresher than the scheduler's last tick: an operator who has
-        # just switched syncing off should see it now, not at the next beat.
+        # just switched syncing off should see it now, not at the next beat. But
+        # the scheduler sees what this process cannot -- KB_SOURCES_APPROVED in
+        # its environment overrides the file, and an unset ${VAR} stops its
+        # (strict) reading of the file -- so what it reported wins on those.
         effective = beat
-        if beat is not None and loaded is not None:
+        if beat is not None and loaded is not None and beat.approved_from != "environment":
             effective = beat.model_copy(
                 update={"approved": loaded.approved, "approved_from": loaded.approved_from,
-                        "config_error": None}
+                        **({} if beat.config_error else {"config_error": None})}
             )
-        elif beat is not None and error is not None:
+        elif beat is not None and error is not None and not beat.config_error:
             effective = beat.model_copy(update={"config_error": error})
         assessment = assess(
             heartbeat=effective,
@@ -304,13 +323,8 @@ def build_app(
                 "health": assessment.health,
                 "problems": list(assessment.problems),
                 "scheduler": views.heartbeat_view(beat, assessment.scheduler_alive),
-                "approved": (
-                    {"value": loaded.approved, "from": loaded.approved_from}
-                    if loaded
-                    else {"value": beat.approved if beat else True,
-                          "from": beat.approved_from if beat else "default"}
-                ),
-                "config_error": error,
+                "approved": approval(loaded),
+                "config_error": (effective.config_error if effective is not None else None) or error,
                 "entries": status["entries"],
                 "by_type": status["by_type"],
                 "overrides": status["overrides"],
@@ -379,7 +393,7 @@ def build_app(
                     "mechanisms": views._without_empty(loaded.defaults.mechanisms.model_dump(exclude_none=True)),
                     "raw_content_max_bytes": loaded.defaults.raw_content_max_bytes,
                 },
-                "approved": {"value": loaded.approved, "from": loaded.approved_from},
+                "approved": approval(loaded),
                 "orphans": orphans,
                 "manual": manual_card(entries.get(FORM_SOURCE_ID, 0)),
                 "sources": [
@@ -419,7 +433,7 @@ def build_app(
         return _json(
             {
                 "now": now_,
-                "approved": {"value": loaded.approved, "from": loaded.approved_from},
+                "approved": approval(loaded),
                 "rows": rows,
                 "config_error": None,
             }
@@ -603,6 +617,13 @@ def build_app(
     async def retire_source(request: Request) -> Response:
         if request.path_params["source_id"] == FORM_SOURCE_ID:
             raise InvalidRequest("manual records are retired by deleting them, one by one")
+        loaded, _ = config()
+        if loaded is not None and any(
+            s.id == request.path_params["source_id"] and s.enabled for s in loaded.sources
+        ):
+            raise InvalidRequest(
+                "that source is still enabled: disable or delete it first, or the next sync brings its entries back"
+            )
         live = {row["source_id"] for row in services.store.status()["by_source"]}
         request_id = request_sync.retire_source(
             source_id=request.path_params["source_id"], sources_with_entries=live
@@ -644,9 +665,11 @@ def build_app(
         return _json({"record": record_view(record)})
 
     async def forms_update(request: Request) -> Response:
-        saved = forms_service().update(
-            request.path_params["slug"], await _body(request, limit=MAX_RECORD_BODY_BYTES)
-        )
+        payload = await _body(request, limit=MAX_RECORD_BODY_BYTES)
+        expected = payload.pop("expected_revision", None)
+        if expected is not None and (not isinstance(expected, int) or isinstance(expected, bool)):
+            raise InvalidRequest("expected_revision must be a number")
+        saved = forms_service().update(request.path_params["slug"], payload, expected_revision=expected)
         return _json({"record": record_view(saved)})
 
     async def forms_delete(request: Request) -> Response:
@@ -728,7 +751,10 @@ def build_app(
                 "The API is available under /api.", media_type="text/plain", status_code=200,
             )
         root = static_dir.resolve()
-        candidate = (root / path).resolve()
+        try:
+            candidate = (root / path).resolve()
+        except ValueError:  # a NUL byte in the path: not a file, and not an error
+            candidate = root
         if path and candidate.is_file() and candidate.is_relative_to(root):
             return FileResponse(candidate)
         return FileResponse(root / "index.html")
@@ -773,7 +799,7 @@ def build_app(
         response.headers.setdefault(
             "Content-Security-Policy",
             "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
-            "frame-ancestors 'none'",
+            "frame-ancestors 'none'; form-action 'self'; base-uri 'none'",
         )
         if request.url.path.startswith("/api/"):
             response.headers.setdefault("Cache-Control", "no-store")

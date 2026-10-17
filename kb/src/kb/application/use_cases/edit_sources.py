@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import difflib
 import hashlib
+import re
 from datetime import datetime
 from typing import Any, Callable, Collection, Literal, Mapping
 
@@ -33,6 +34,59 @@ from kb.application.ports.source_history import Revision, SourceHistory
 from kb.sources_config import AnySource, ConfigError, SourcesConfig, parse, parse_duration
 
 Level = Literal["info", "warning", "danger"]
+
+#: What the console may write into the file as a `${VAR}` placeholder, and as the
+#: *name* of a credential variable. The scheduler resolves both from the whole of
+#: its environment -- which is the stack's `.env`, secrets of other components
+#: included -- and then sends the credential to whatever URL the file names. So
+#: the console, which can edit that file, must not be able to point either at
+#: just any variable (FR-CFG-14). An operator who needs something else edits the
+#: file by hand; that was always possible and is a deliberate act on the host.
+_PLACEHOLDER = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)")
+_LOCATOR_VARIABLE = re.compile(r"^[A-Z][A-Z0-9_]*_(URL|URI|HOST|ENDPOINT|DOMAIN)$")
+_CREDENTIAL_VARIABLE = re.compile(r"^[A-Z][A-Z0-9_]*(_TOKEN|_PAT)$|^TOKEN$|^PAT$")
+#: Variables that belong to other components; never a source's credential.
+_PROTECTED_PREFIXES = (
+    "KB_ADMIN", "KB_POSTGRES", "KB_READER", "KB_WEBHOOK", "KB_SUMMARIZER", "POSTGRES", "JWT", "CREDS",
+    "MEILI", "MONGO", "ADMIN_PANEL", "SESSION", "LIBRECHAT", "RAG_", "VLLM", "OPENAI",
+)
+
+
+def _strings(value: Any):
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, Mapping):
+        for item in value.values():
+            yield from _strings(item)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            yield from _strings(item)
+
+
+def _guard_variables(config: Mapping[str, Any], current: Mapping[str, Any] | None = None) -> None:
+    """`current` is what the file already says: a value left as it is was the
+    operator's (or the host's) before the console touched it, and is not judged
+    again -- only what this change introduces is."""
+    existing = set(_strings(current)) if current else set()
+    for text in _strings(config):
+        if text in existing:
+            continue
+        for name in _PLACEHOLDER.findall(text):
+            if not _LOCATOR_VARIABLE.match(name):
+                raise InvalidChange(
+                    f"${{{name}}} cannot be written from the console: a placeholder here may only name "
+                    "a variable ending in _URL, _URI, _HOST, _ENDPOINT or _DOMAIN. The scheduler resolves "
+                    "it from its whole environment, which holds other components' secrets. "
+                    "Edit the file on the host if you really need it."
+                )
+    for key, value in config.items():
+        if key.endswith("_env") and isinstance(value, str) and not (current and current.get(key) == value):
+            if not _CREDENTIAL_VARIABLE.match(value) or value.startswith(_PROTECTED_PREFIXES):
+                raise InvalidChange(
+                    f"{key}: {value!r} cannot be used from the console. A source's credential variable "
+                    "must end in _TOKEN or _PAT and must not belong to another component "
+                    "(for example KB_ADMIN_TOKEN or JWT_*). Edit the file on the host if you really need it."
+                )
 
 class InvalidChange(ValueError):
     """The change cannot be made; the message says why, for the operator."""
@@ -256,8 +310,11 @@ class EditSources:
                     f"kind must be one of {', '.join(self._buildable)}; "
                     "the others are specified but not built"
                 )
-            if new_id in known:
-                raise InvalidChange(f"there is already a source called {new_id!r}")
+            if new_id.casefold() in {k.casefold() for k in known}:
+                # Entry ids are lowercased, so ids that differ only by case would
+                # share a namespace and retire each other's entries.
+                raise InvalidChange(f"there is already a source called {new_id!r} (ids are not case-sensitive)")
+            _guard_variables(change.config)
             self._validate_source(change.config)
         elif isinstance(change, UpdateSource):
             if change.id not in known:
@@ -267,6 +324,7 @@ class EditSources:
             current = next(s for s in before.sources if s.id == change.id)
             if change.config.get("kind", current.kind) != current.kind:
                 raise InvalidChange("a source's kind cannot be changed; add a new source instead")
+            _guard_variables(change.config, current.model_dump(mode="json"))
             merged = merge_settings(current.model_dump(mode="json"), change.config)
             self._validate_source({**merged, "id": change.id, "kind": current.kind})
         elif isinstance(change, DeleteSource):
@@ -322,6 +380,16 @@ class EditSources:
                 + ("enabled: it is synced on its next tick." if source.enabled
                    else "disabled: nothing is synced until you enable it. "
                         "Run it as a dry run first to see what it would catalogue."))))
+        token_env = getattr(source, "token_env", None)
+        base_url = getattr(source, "base_url", None)
+        if token_env and base_url and (
+            old is None
+            or getattr(old, "token_env", None) != token_env
+            or getattr(old, "base_url", None) != base_url
+        ):
+            notes.append(Warn(level="warning", text=(
+                f"This source sends the credential held in {token_env} (set in the scheduler's environment) "
+                f"to {base_url}. Point it only at a server that should receive that credential.")))
         if source.store_raw_content and not (old and old.store_raw_content):
             notes.append(Warn(level="danger", text=(
                 "Turning on stored text makes every document's full text readable, through the "

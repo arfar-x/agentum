@@ -32,7 +32,10 @@ class FileSourcesFile:
 
     def snapshot(self) -> FileSnapshot:
         data = self._path.read_bytes() if self._path.exists() else b""
-        return FileSnapshot(text=data.decode("utf-8"), etag=_etag(data))
+        try:
+            return FileSnapshot(text=data.decode("utf-8"), etag=_etag(data))
+        except UnicodeDecodeError as exc:
+            raise FileNotWritable(f"{self._path} is not valid UTF-8, so it will not be edited from here") from exc
 
     def writable(self) -> bool:
         if self._path.exists():

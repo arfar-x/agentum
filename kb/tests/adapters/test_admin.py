@@ -865,3 +865,67 @@ def test_the_proxy_setting_is_read_from_the_environment():
     # Covers: FR-ADM-02
     assert AdminSettings.from_env({"KB_ADMIN_TOKEN": TOKEN}).forwarded_allow_ips == ""
     assert AdminSettings.from_env({"KB_ADMIN_TOKEN": TOKEN, "KB_ADMIN_FORWARDED_ALLOW_IPS": "172.18.0.1"}).forwarded_allow_ips == "172.18.0.1"
+
+
+# -- what the console resolves, and what it believes (FR-ADM-15, FR-ADM-20) -----------------
+
+
+def test_a_placeholder_in_the_file_is_never_resolved_from_the_consoles_own_environment(world, monkeypatch, client):
+    # Covers: FR-ADM-20
+    monkeypatch.setenv("KB_SUMMARIZER_API_KEY", "sk-the-consoles-own-secret")
+    monkeypatch.setenv("KB_DATABASE_URL", "postgresql://kb_admin:the-db-password@db/kb")
+    world.sources_file.write_text(
+        CONFIG.replace('jql: "project = PAY"', 'jql: "${KB_SUMMARIZER_API_KEY} ${KB_DATABASE_URL:-none}"'),
+        encoding="utf-8",
+    )
+    everything = " ".join(client.get(path).text for path in ("/api/sources", "/api/overview", "/api/schedules", "/api/issues"))
+    assert "sk-the-consoles-own-secret" not in everything
+    assert "the-db-password" not in everything
+    assert "${KB_SUMMARIZER_API_KEY}" in client.get("/api/sources").text, "shown as written"
+
+
+def test_syncing_switched_off_by_the_schedulers_environment_is_shown_as_off(world, client):
+    # Covers: FR-ADM-20
+    world.heartbeats.beat(Heartbeat(beat_at=NOW - timedelta(seconds=2), approved=False, approved_from="environment"))
+    for path in ("/api/overview", "/api/sources", "/api/schedules"):
+        approved = client.get(path).json()["approved"]
+        assert approved == {"value": False, "from": "environment"}, path
+
+
+def test_the_file_still_wins_over_a_stale_beat_when_the_environment_is_not_involved(world, client):
+    # Covers: FR-ADM-20
+    world.sources_file.write_text(CONFIG.replace("approved: true", "approved: false"), encoding="utf-8")
+    world.heartbeats.beat(Heartbeat(beat_at=NOW - timedelta(seconds=2), approved=True, approved_from="file"))
+    assert client.get("/api/overview").json()["approved"] == {"value": False, "from": "file"}
+
+
+def test_an_error_the_scheduler_reports_is_not_hidden_by_a_console_that_can_read_the_file(world, client):
+    # Covers: FR-ADM-20
+    world.heartbeats.beat(Heartbeat(
+        beat_at=NOW - timedelta(seconds=2),
+        config_error="kb-sources.yaml:12: ${GITLAB_TOKEN_URL} is not set and has no default",
+    ))
+    overview = client.get("/api/overview").json()
+    assert "is not set" in (overview["config_error"] or "")
+
+
+def test_a_path_with_a_nul_byte_is_not_found_not_an_error(world, tmp_path):
+    # Covers: FR-ADM-01
+    web = tmp_path / "web"
+    web.mkdir()
+    (web / "index.html").write_text("<html>console</html>", encoding="utf-8")
+    c = make_client(world, static_dir=str(web))
+    assert c.get("/%00").status_code == 200  # falls back to the app, like any unknown route
+    assert c.get("/assets/%00x.js").status_code == 200
+
+
+def test_pages_cannot_draw_a_form_or_change_their_base(client):
+    # Covers: FR-ADM-01
+    csp = client.get("/api/overview").headers["content-security-policy"]
+    assert "form-action 'self'" in csp and "base-uri 'none'" in csp
+
+
+def test_an_enabled_source_cannot_have_its_entries_retired_behind_its_back(client, world):
+    # Covers: FR-ADM-16
+    refused = client.post("/api/sources/confluence-eng/retire", headers=CSRF)
+    assert refused.status_code == 400 and "still enabled" in refused.json()["error"]["message"]

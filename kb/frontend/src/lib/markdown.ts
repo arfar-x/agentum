@@ -8,5 +8,5 @@ import { marked } from 'marked';
  */
 export function renderMarkdown(text: string): string {
   const html = marked.parse(text, { async: false, gfm: true, breaks: false }) as string;
-  return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+  return DOMPurify.sanitize(html, { USE_PROFILES: { html: true }, FORBID_TAGS: ['style', 'form', 'input', 'button', 'textarea', 'select'] });
 }

@@ -183,3 +183,40 @@ def test_an_edit_to_a_missing_source_is_refused():
     config = parse(TEXT, env={}, lenient=True)
     with pytest.raises((ConfigError, StopIteration)):
         RuamelSourceEditor().apply(TEXT, DeleteSource(id="nope"), config)
+
+
+@pytest.mark.parametrize(
+    "value", ["13:30", "NO", "on", "1e3", "123", "yes", "2026-10-17", "null", "~"],
+)
+def test_a_value_the_scheduler_would_misread_is_written_quoted(value):
+    # Covers: FR-CFG-11
+    from kb.application.ports.source_files import UpdateSource
+    from kb.sources_config import parse
+
+    text = "approved: true\nsources:\n  - id: w\n    kind: confluence\n    enabled: true\n    spaces: [ENG]\n"
+    ed = RuamelSourceEditor()
+    out = ed.apply(text, UpdateSource(id="w", config={"spaces": [value]}), parse(text, env={}))
+    assert parse(out, env={}).sources[0].spaces == (value,), "it reads back as typed"
+    assert f'"{value}"' in out or f"'{value}'" in out
+
+
+def test_a_nightly_time_after_noon_can_be_set():
+    # Covers: FR-CFG-11
+    from kb.application.ports.source_files import UpdateSource
+    from kb.sources_config import parse
+
+    text = "approved: true\nsources:\n  - id: w\n    kind: confluence\n    enabled: true\n    spaces: [ENG]\n"
+    out = RuamelSourceEditor().apply(
+        text, UpdateSource(id="w", config={"mechanisms": {"full_scrape": {"at": "13:30"}}}), parse(text, env={})
+    )
+    assert parse(out, env={}).mechanisms_for(parse(out, env={}).sources[0]).full_scrape.at == "13:30"
+
+
+def test_ordinary_strings_stay_unquoted():
+    # Covers: FR-CFG-11
+    from kb.application.ports.source_files import UpdateSource
+    from kb.sources_config import parse
+
+    text = "approved: true\nsources:\n  - id: w\n    kind: confluence\n    enabled: true\n    spaces: [ENG]\n"
+    out = RuamelSourceEditor().apply(text, UpdateSource(id="w", config={"spaces": ["OPS", "BIZ"]}), parse(text, env={}))
+    assert "spaces: [OPS, BIZ]" in out

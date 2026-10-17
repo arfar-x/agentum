@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from kb.domain.content import DEFAULT_RAW_CONTENT_MAX_BYTES
 from kb.domain.entry import EntryType
 
-SLUG = re.compile(r"^[a-z0-9][a-z0-9-]{0,78}[a-z0-9]$|^[a-z0-9]$")
+SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,78}[a-z0-9]|[a-z0-9]")
 #: `en`, `fa`, `pt-BR` -- and `und` for "no language".
 LANGUAGE = re.compile(r"^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$")
 
@@ -46,7 +46,7 @@ class FormRecord(BaseModel):
     @field_validator("slug")
     @classmethod
     def _slug(cls, value: str) -> str:
-        if not SLUG.match(value):
+        if not SLUG.fullmatch(value):
             raise ValueError("use lowercase letters, digits and '-' (at most 80 characters)")
         return value
 

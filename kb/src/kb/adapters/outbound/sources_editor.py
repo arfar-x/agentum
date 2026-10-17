@@ -18,9 +18,11 @@ import io
 import re
 from typing import Any, Mapping
 
+import yaml as pyyaml
 from pydantic import TypeAdapter
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
+from ruamel.yaml.scalarstring import DoubleQuotedScalarString, ScalarString
 
 from kb.application.ports.source_files import (
     CreateSource,
@@ -58,7 +60,21 @@ def _to_ruamel(value: Any) -> Any:
         if all(not isinstance(item, (Mapping, list, tuple)) for item in value):
             seq.fa.set_flow_style()
         return seq
+    if isinstance(value, str) and not isinstance(value, ScalarString):
+        return _quoted_if_misread(value)
     return value
+
+
+def _quoted_if_misread(text: str) -> str:
+    """ruamel writes in YAML 1.2, where `13:30` and `NO` are plain strings; the
+    scheduler reads the file with PyYAML (YAML 1.1), where they are a number and
+    a boolean. A string either reader would take for something else is quoted,
+    so what the console writes reads back as what the operator typed."""
+    try:
+        resolved = pyyaml.safe_load(text)
+    except pyyaml.YAMLError:
+        return DoubleQuotedScalarString(text)
+    return text if isinstance(resolved, str) else DoubleQuotedScalarString(text)
 
 
 def _clean(value: Any) -> Any:
