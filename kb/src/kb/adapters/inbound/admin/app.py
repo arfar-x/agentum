@@ -179,6 +179,15 @@ def build_app(
 
     # -- session -------------------------------------------------------------
     async def health(_: Request) -> Response:
+        # Cheap, unauthenticated, and honest: a console whose database is gone
+        # is not healthy, whatever its process is doing (FR-ADM-17).
+        ping = getattr(services.store, "ping", None)
+        if ping is not None:
+            try:
+                ping()
+            except Exception:
+                logger.warning("health check: the database is unreachable")
+                return _json({"status": "database unavailable"}, 503)
         return _json({"status": "ok"})
 
     async def session_state(request: Request) -> Response:

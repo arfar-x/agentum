@@ -493,8 +493,26 @@ def scenario_restart() -> None:
     check(request_sync("eng-wiki", "full")["status"] == "done", "and the next request runs normally")
 
 
+def scenario_database_restart() -> None:
+    step("12. The database restarts under a running stack")
+    command = os.environ.get("E2E_PG_RESTART_CMD")
+    if not command:
+        print("  skip  set E2E_PG_RESTART_CMD to a command that restarts Postgres to run this")
+        return
+    before = q("SELECT beat_at FROM scheduler_heartbeat")[0]["beat_at"]
+    subprocess.run(command, shell=True, check=True, capture_output=True)
+    wait_for(lambda: q("SELECT 1"), "Postgres to accept connections again", 60)
+    wait_for(lambda: q("SELECT beat_at FROM scheduler_heartbeat")[0]["beat_at"] > before, "the scheduler to beat again", 30)
+    check(True, "the scheduler is beating again with no restart of its own")
+    check(request_sync("eng-wiki", "full", timeout=60)["status"] == "done", "and serves a request")
+    overview = wait_for(lambda: admin("GET", "/api/overview").ok and admin("GET", "/api/overview").json(), "the console to answer", 30)
+    check(overview["scheduler"]["alive"] is True, "the console answers and sees the scheduler alive")
+    check(requests.get(f"{ADMIN_URL}/health", timeout=5).ok, "its health check passes")
+    check(wait_for(lambda: search("Payment reconciliation"), "mcp-kb to search again", 30), "mcp-kb searches again")
+
+
 def scenario_secrets_and_lockout() -> None:
-    step("12. No credential reached a browser or a log")
+    step("13. No credential reached a browser or a log")
     secrets = [WIKI_PAT, ADMIN_PW, READER_PW]
     captured = (WORK / "responses.jsonl").read_text(encoding="utf-8")
     check(len(captured.splitlines()) > 50, f"{len(captured.splitlines())} API responses were captured from the browser")
@@ -506,7 +524,7 @@ def scenario_secrets_and_lockout() -> None:
     env = open(f"/proc/{PROCS['admin'].process.pid}/environ", "rb").read().decode().split("\0")
     check(not [e for e in env if e.startswith(("KB_CONFLUENCE", "KB_JIRA", "GITLAB", "KB_GITLAB"))], "the console process was never given a source credential")
 
-    step("13. Guessing the token")
+    step("14. Guessing the token")
     codes = [
         requests.post(f"{ADMIN_URL}/api/session", json={"token": "wrong" * 10}, headers={"X-KB-Admin": "1"}, timeout=5).status_code
         for _ in range(7)
@@ -526,6 +544,7 @@ SCENARIOS = [
     scenario_hand_edit,
     scenario_delete_source,
     scenario_restart,
+    scenario_database_restart,
     scenario_secrets_and_lockout,
 ]
 PROCS: dict[str, Proc] = {}

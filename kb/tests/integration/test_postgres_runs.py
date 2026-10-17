@@ -229,3 +229,38 @@ def test_the_copy_stores_each_sources_settings_as_data(history, store):
         cursor.execute("SELECT kind, enabled, config FROM kb_source WHERE id = 'a'")
         row = cursor.fetchone()
     assert (row["kind"], row["enabled"], row["config"]["jql"]) == ("jira", False, "x")
+
+
+def _kill_session(store, dsn) -> None:
+    """What a database restart does to a connection: the server ends it."""
+    with store.connection.cursor() as cursor:
+        cursor.execute("SELECT pg_backend_pid() AS pid")
+        pid = cursor.fetchone()["pid"]
+    with psycopg.connect(dsn, autocommit=True) as other:
+        other.execute("SELECT pg_terminate_backend(%s)", (pid,))
+
+
+# Covers: NFR-DEP-09
+def test_every_store_keeps_working_after_the_server_ends_its_connection(store, dsn, runs, queue, heartbeats):
+    from kb.adapters.outbound.postgres_forms import PostgresFormRecords
+
+    forms = PostgresFormRecords(store.connection)
+    run_id = start(runs)
+
+    _kill_session(store, dsn)
+    store.connection._last_used -= 60  # idle long enough to have been dropped, as after a restart
+
+    assert runs.get_run(run_id).source_id == "jira", "the run log reads again"
+    assert queue.list_requests(limit=5) == [], "so does the queue"
+    assert forms.list() == [], "and the manual records"
+    store.ping()
+    assert store.status()["entries"]["live"] == 0, "and the catalog"
+
+
+# Covers: NFR-DEP-09
+def test_a_call_cut_off_by_a_restart_fails_and_the_next_one_recovers(store, dsn, runs):
+    store.connection._ping_after = 10**9  # nothing notices in advance this time
+    _kill_session(store, dsn)
+    with pytest.raises(psycopg.OperationalError):
+        runs.list_runs(limit=1)
+    assert runs.list_runs(limit=1) == []

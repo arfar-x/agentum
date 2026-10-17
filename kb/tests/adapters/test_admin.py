@@ -800,3 +800,18 @@ def test_a_source_card_separates_what_it_says_from_what_it_inherits(client, worl
     assert data["defaults"]["mechanisms"]["incremental"] == {"enabled": True, "every": "15m"}
     other = next(c for c in data["sources"] if c["id"] == "jira-product")
     assert other["own_mechanisms"] == {}
+
+
+def test_health_follows_the_database(anon, world):
+    # Covers: FR-ADM-17
+    assert anon.get("/health").status_code == 200
+    world.store.ping = lambda: None
+    assert anon.get("/health").status_code == 200
+
+    def refuse():
+        raise ConnectionError("the connection is lost")
+
+    world.store.ping = refuse
+    down = anon.get("/health")
+    assert down.status_code == 503
+    assert "lost" not in down.text, "what the driver said is for the log, not the caller"

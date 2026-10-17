@@ -4,7 +4,7 @@
 |---|---|
 | **Spec ID** | SPEC-KB-001 |
 | **Status** | Active — implemented (see §12; two source kinds deferred by choice) |
-| **Version** | 2.8.0 |
+| **Version** | 2.9.0 |
 | **Last updated** | 2026-10-14 |
 | **Implements** | `kb/` module, `mcp-kb` service |
 | **Related** | [`AGENTS.md`](../../AGENTS.md), [`docs/CONFIGURATION.md`](../CONFIGURATION.md), [`kb/README.md`](../../kb/README.md) |
@@ -302,6 +302,7 @@ catalog -- the console asks it to, through a queue (FR-SCH-11). Designed in
 | FR-ADM-14 | An operator MUST be able to read a stored record the way an agent does: in pages with the same offsets and totals as `kb_get` (FR-CNT-08). | done |
 | FR-ADM-16 | An operator MUST be able to retire the entries of a source that is no longer configured, so they stop appearing in search. Retiring is the soft delete of FR-REC-05 -- the entries are reported, not erased, and come back if the source returns -- and removes their stored text (FR-CNT-06). Deleting a source from the console MUST say that its entries otherwise stay searchable, and offer to retire them. | done |
 | FR-ADM-15 | No response MUST contain the value of an environment variable, a token or a password; a credential is reported only as set or not set. | done |
+| FR-ADM-17 | The console's health check MUST fail when the database cannot be reached, so a console holding a dead connection is not reported healthy. | done |
 
 ## 7. Non-functional requirements
 
@@ -326,6 +327,7 @@ catalog -- the console asks it to, through a queue (FR-SCH-11). Designed in
 | NFR-DEP-06 | The index MUST be rebuildable from sources; only the gap log and checkpoints require backup. | done |
 | NFR-DEP-07 | A completed write MUST be committed: visible to other connections, and surviving the writing connection closing. | done |
 | NFR-DEP-08 | The admin console MUST be its own service, off unless its compose profile is enabled, published only on a loopback address by default, given no source credentials and no `env_file`, and connected as its own least-privilege role (FR-ADM-04). | done |
+| NFR-DEP-09 | Every long-lived process (the scheduler, the admin console, the MCP server) MUST recover from a lost database connection without being restarted: a connection known to be lost MUST be replaced before its next use, and one idle long enough to have been dropped MUST be checked first. A call cut off mid-way MUST fail, not be retried blindly. | done |
 
 ### 7.3 Performance and cost — `NFR-PRF`
 
@@ -496,6 +498,7 @@ which a flat catalog cannot answer.
 | Version | Date | Change |
 |---|---|---|
 | 1.0.0 | 2026-09-24 | First specification. Phases 1–3 implemented against it. |
+| 2.9.0 | 2026-10-17 | Production hardening of the admin console and its neighbours: NFR-DEP-09 (a lost database connection is replaced, not fatal -- before this, a database restart left the scheduler, console and MCP server failing until restarted by hand) and FR-ADM-17 (health reflects the database). |
 | 2.8.0 | 2026-10-14 | Added §6.11 (FR-ADM-01..16), FR-SCH-08..13, FR-CFG-10..12, FR-CLI-06, FR-SRC-07 and NFR-DEP-08: an admin console for the operator, in its own opt-in service. It reads run history and the catalog, queues syncs for the scheduler to run, edits the source configuration after an explicit approval, and holds manual `form` records with on-demand summaries. FR-ENT-02 now admits the catalog's own `form` kind; N2 and §11 say what that does and does not change. Run history gained a start-of-run record, a status and the trigger, because "is it running now, and who asked" was not answerable from the end-of-run row alone. |
 | 2.7.0 | 2026-10-11 | Added FR-REC-13: a label-only change re-classifies the entry without re-summarizing. Adding or swapping a wiki label changes neither the page's text nor its version, so the content-hash gate treated it as unchanged and the entry kept its old type and tags until the text next changed. |
 | 2.6.0 | 2026-10-11 | FR-AGT-02 narrowed: the front door searches the catalog before answering itself, not before delegating. Found in a live trial of the product-spec flow: the front door searched, then handed off to a specialist that searched the same question again, before doing everything itself. The front door is now a router with no write tools; the specialist it hands to grounds the work (FR-AGT-03). |

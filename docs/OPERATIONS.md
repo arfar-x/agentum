@@ -114,10 +114,12 @@ sync: **`form_record` (manual records) and `kb_source_revision` (the source
 configuration's history) are only in the `kb_data` backup.**
 
 Restart order after an upgrade: `kb-db` first, then `mcp-kb` and
-`kb-scheduler` (both reconnect on their own, so `docker compose up -d` in any
-order works; the ordering only matters if you stop the database deliberately).
-The scheduler survives a database blip -- the tick fails, is logged, and the
-next one runs.
+`kb-scheduler` (and `kb-admin`, if you run it). All of them replace a lost
+database connection on their own, so `docker compose up -d` in any order works,
+and a database restart or failover needs nothing from you: a call that was cut
+off mid-way fails and is logged (a scheduler tick, one console request), and the
+next one reconnects. Only the `kb-admin` health check reports the outage
+meanwhile (503 until the database answers).
 
 ## Upgrades
 

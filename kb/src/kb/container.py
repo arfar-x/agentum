@@ -72,8 +72,7 @@ def build(settings: Settings | None = None) -> Container:
     `kb.container` -- which the CLI does to read `--help`, and tests do to check
     wiring -- doesn't require the driver to be installed.
     """
-    import psycopg
-
+    from kb.adapters.outbound.postgres_connection import ResilientConnection
     from kb.adapters.outbound.postgres_runs import (
         PostgresHeartbeat,
         PostgresRunLog,
@@ -88,7 +87,7 @@ def build(settings: Settings | None = None) -> Container:
     # The heartbeat is written from its own thread while a long sync holds the
     # main connection, so it gets a connection of its own rather than sharing
     # one across threads mid-transaction.
-    beat_connection = psycopg.connect(settings.database_url, connect_timeout=5, autocommit=True)
+    beat_connection = ResilientConnection.to(settings.database_url)
     clock = SystemClock(settings.tzinfo)
     # Manual records arrive with the wording their author approved; the model
     # is asked only for what does not (adapters/outbound/form_source.py).

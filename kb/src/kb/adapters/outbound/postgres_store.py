@@ -31,6 +31,7 @@ from typing import Iterable, Sequence
 import psycopg
 from psycopg.rows import dict_row
 
+from kb.adapters.outbound.postgres_connection import ResilientConnection
 from kb.application.ports.entry_store import ContentSlice
 from kb.domain.content import RawContent
 from kb.domain.entry import Entry, EntryType
@@ -122,10 +123,15 @@ class PostgresEntryStore:
         a real BEGIN/COMMIT. It also stops a long-lived reader (the MCP server)
         from holding a transaction open between tool calls.
         """
-        return cls(psycopg.connect(dsn, connect_timeout=connect_timeout, autocommit=True))
+        return cls(ResilientConnection.to(dsn, connect_timeout=connect_timeout))
 
     def close(self) -> None:
         self._connection.close()
+
+    def ping(self) -> None:
+        """Raises if the database cannot be reached: what a health check asks."""
+        with self._connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
 
     # -- schema ------------------------------------------------------------
     def migrate(self, migrations_dir: Path | None = None) -> list[str]:
