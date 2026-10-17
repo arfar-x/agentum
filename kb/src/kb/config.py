@@ -177,6 +177,11 @@ class AdminSettings(BaseModel):
     #: Mark the cookie `Secure`. Off by default because the stack serves plain
     #: HTTP on a loopback address; turn it on behind a TLS-terminating proxy.
     cookie_secure: bool = False
+    #: Addresses whose `X-Forwarded-For` is believed, comma separated (or `*`).
+    #: Empty means nobody's: the client is whoever connected. Behind a reverse
+    #: proxy this must name the proxy, or every visitor is the proxy and five
+    #: wrong guesses from anyone lock everyone out of the login.
+    forwarded_allow_ips: str = ""
 
     @field_validator("token")
     @classmethod
@@ -200,6 +205,7 @@ class AdminSettings(BaseModel):
             ("port", "KB_ADMIN_PORT"),
             ("static_dir", "KB_ADMIN_STATIC_DIR"),
             ("session_hours", "KB_ADMIN_SESSION_HOURS"),
+            ("forwarded_allow_ips", "KB_ADMIN_FORWARDED_ALLOW_IPS"),
         ):
             raw = source.get(variable)
             if raw not in (None, ""):

@@ -12,16 +12,21 @@ psycopg = pytest.importorskip("psycopg")
 class FakeConnection:
     """What `ResilientConnection` needs from a connection, and no more."""
 
-    def __init__(self, name: str, *, dies_on_ping: bool = False) -> None:
+    def __init__(self, name: str, *, dies_on_ping: bool = False, errors_but_looks_alive: bool = False) -> None:
         self.name = name
         self.closed = False
         self.broken = False
         self.row_factory = None
         self.queries: list[str] = []
         self.dies_on_ping = dies_on_ping
+        self.errors_but_looks_alive = errors_but_looks_alive
 
     def execute(self, query, *args, **kwargs):
         self.queries.append(query)
+        if self.errors_but_looks_alive:
+            # What a server that is shutting down sends: an error, with the
+            # socket still open, so psycopg has not marked the connection broken.
+            raise psycopg.errors.AdminShutdown("terminating connection due to administrator command")
         if self.dies_on_ping:
             self.broken = True
             raise psycopg.OperationalError("the connection is lost")
@@ -82,6 +87,14 @@ def test_one_idle_long_enough_to_have_been_dropped_is_checked_first():
     # caller never sees the failure.
     assert resilient.cursor() == ("cursor", "b")
     assert opened[0].queries == ["SELECT 1"]
+
+
+def test_a_ping_the_server_answers_with_an_error_means_the_connection_is_not_used():
+    # Covers: NFR-DEP-09
+    resilient, opened, clock = wire(FakeConnection("a", errors_but_looks_alive=True), FakeConnection("b"))
+    clock.now += PING_AFTER_SECONDS + 1
+    assert opened[0].broken is False and opened[0].closed is False
+    assert resilient.cursor() == ("cursor", "b")
 
 
 def test_a_busy_connection_is_not_pinged_on_every_call():

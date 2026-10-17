@@ -47,6 +47,10 @@ def main() -> None:  # pragma: no cover -- wiring and uvicorn
             host=admin.host,
             port=admin.port,
             log_level="info",
+            # build_app trusts a proxy's X-Forwarded-For itself, from the
+            # addresses KB_ADMIN_FORWARDED_ALLOW_IPS names; uvicorn must not
+            # also rewrite it.
+            proxy_headers=False,
         )
     finally:
         container.close()

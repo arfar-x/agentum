@@ -182,3 +182,49 @@ def test_the_sources_screen_carries_a_card_for_the_manual_records(client, world)
     publish(world)
     assert client.get("/api/sources").json()["manual"]["pending"] == 0
     assert "form" not in {o["source_id"] for o in client.get("/api/sources").json()["orphans"]}
+
+
+def test_an_oversized_request_is_refused_before_it_is_read(client, world):
+    # Covers: FR-ADM-18
+    huge = "x" * (2 * 1024 * 1024)
+    refused = client.post("/api/sync", content=json_bytes({"source_id": "form", "pad": huge}),
+                          headers={**CSRF, "Content-Type": "application/json"})
+    assert refused.status_code == 413 and refused.json()["error"]["type"] == "too_large"
+    assert world.queue.requests == []
+
+
+def test_a_record_may_be_larger_than_an_ordinary_request(client):
+    # Covers: FR-ADM-18
+    body = "word " * 400_000  # ~2 MB: over the ordinary limit, well inside what is kept
+    saved = client.post("/api/forms", json={**RECORD, "body": body}, headers=CSRF)
+    assert saved.status_code == 201
+
+
+def test_a_record_cannot_be_more_than_the_catalog_keeps(client):
+    # Covers: FR-ADM-18
+    from kb.domain.content import DEFAULT_RAW_CONTENT_MAX_BYTES
+
+    body = "é" * (DEFAULT_RAW_CONTENT_MAX_BYTES // 2 + 1)  # two bytes each: one over
+    refused = client.post("/api/forms", json={**RECORD, "body": body}, headers=CSRF)
+    assert refused.status_code in (400, 413)
+    if refused.status_code == 400:
+        assert refused.json()["error"]["type"] == "invalid_record" and "bytes" in refused.json()["error"]["message"]
+
+
+def test_the_limit_counts_bytes_not_characters():
+    # Covers: FR-ADM-18
+    import pytest
+    from pydantic import ValidationError
+
+    from kb.application.ports.form_records import FormRecord
+    from kb.domain.content import DEFAULT_RAW_CONTENT_MAX_BYTES
+
+    FormRecord(slug="ok", title={"en": "t"}, body="é" * (DEFAULT_RAW_CONTENT_MAX_BYTES // 2))
+    with pytest.raises(ValidationError, match="bytes"):
+        FormRecord(slug="no", title={"en": "t"}, body="é" * (DEFAULT_RAW_CONTENT_MAX_BYTES // 2 + 1))
+
+
+def json_bytes(payload) -> bytes:
+    import json
+
+    return json.dumps(payload).encode()

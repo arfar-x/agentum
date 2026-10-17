@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
 
@@ -68,3 +69,75 @@ def test_a_file_the_console_may_not_write_says_so(tmp_path):
     assert file.writable() is False
     with pytest.raises(FileNotWritable, match="KB_ADMIN_USER"):
         file.write("two\n", expected_etag=file.snapshot().etag)
+
+
+def _file(tmp_path, text="a: 1\n"):
+    path = tmp_path / "kb-sources.yaml"
+    path.write_text(text, encoding="utf-8")
+    return path, FileSourcesFile(path)
+
+
+def test_a_write_that_fails_half_way_puts_the_old_file_back(tmp_path, monkeypatch):
+    # Covers: FR-CFG-13
+    import errno
+
+    path, sources = _file(tmp_path, "original: true\n" * 20)
+    etag = sources.snapshot().etag
+    real_fsync = os.fsync
+    calls = []
+
+    def disk_full(fd):
+        calls.append(fd)
+        if len(calls) == 1:
+            raise OSError(errno.ENOSPC, "No space left on device")
+        return real_fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", disk_full)
+    with pytest.raises(FileNotWritable, match="previous content was put back"):
+        sources.write("replacement: true\n", expected_etag=etag)
+    assert path.read_text(encoding="utf-8") == "original: true\n" * 20
+
+
+def test_a_write_that_does_not_read_back_as_written_is_undone(tmp_path, monkeypatch):
+    # Covers: FR-CFG-13
+    path, sources = _file(tmp_path, "original: true\n")
+    etag = sources.snapshot().etag
+    real = Path.read_bytes
+    seen = {"after_write": False}
+
+    def lying(self):
+        data = real(self)
+        if self == path and seen["after_write"]:
+            seen["after_write"] = False
+            return data[:-3]  # what a failing mount might hand back
+        return data
+
+    monkeypatch.setattr(Path, "read_bytes", lying)
+    real_overwrite = FileSourcesFile._overwrite
+
+    def overwrite(self, payload, existed):
+        real_overwrite(self, payload, existed)
+        seen["after_write"] = True
+
+    monkeypatch.setattr(FileSourcesFile, "_overwrite", overwrite)
+    with pytest.raises(FileNotWritable, match="not what was written"):
+        sources.write("replacement: true\n", expected_etag=etag)
+    monkeypatch.undo()
+    assert path.read_text(encoding="utf-8") == "original: true\n"
+
+
+def test_a_failed_first_write_leaves_no_file_behind(tmp_path, monkeypatch):
+    # Covers: FR-CFG-13
+    path = tmp_path / "new.yaml"
+    sources = FileSourcesFile(path)
+    monkeypatch.setattr(os, "fsync", lambda fd: (_ for _ in ()).throw(OSError(5, "I/O error")))
+    with pytest.raises(FileNotWritable):
+        sources.write("a: 1\n", expected_etag=sources.snapshot().etag)
+    assert not path.exists()
+
+
+def test_a_successful_write_reports_what_is_on_disk(tmp_path):
+    # Covers: FR-CFG-13
+    path, sources = _file(tmp_path)
+    snapshot = sources.write("b: 2\n", expected_etag=sources.snapshot().etag)
+    assert snapshot.text == "b: 2\n" and path.read_text(encoding="utf-8") == "b: 2\n"

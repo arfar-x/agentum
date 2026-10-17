@@ -12,6 +12,7 @@ transactions on a shared connection. Anything slow that touches no database
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -98,10 +99,32 @@ def _json(content: Any, status: int = 200, **kwargs: Any) -> JSONResponse:
     return _Json(content, status_code=status, **kwargs)
 
 
-async def _body(request: Request) -> dict[str, Any]:
+#: What any request body may be, except a record's. Nothing but a record is big:
+#: a source change or a sync request is a few hundred bytes.
+MAX_BODY_BYTES = 1024 * 1024
+#: A record's text may be as large as the catalog keeps (spec §6.10), plus the
+#: JSON around it and room for escaping.
+MAX_RECORD_BODY_BYTES = DEFAULT_RAW_CONTENT_MAX_BYTES + 2 * 1024 * 1024
+
+
+class RequestTooLarge(InvalidRequest):
+    pass
+
+
+async def _body(request: Request, *, limit: int = MAX_BODY_BYTES) -> dict[str, Any]:
+    # Refused by its declared size before a byte is read, and again while
+    # reading, because a client may declare nothing (FR-ADM-18).
+    declared = request.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > limit:
+        raise RequestTooLarge(f"the request is larger than the {limit // 1024} KiB this endpoint accepts")
+    received = bytearray()
+    async for chunk in request.stream():
+        received += chunk
+        if len(received) > limit:
+            raise RequestTooLarge(f"the request is larger than the {limit // 1024} KiB this endpoint accepts")
     try:
-        payload = await request.json()
-    except Exception as exc:
+        payload = json.loads(bytes(received))
+    except ValueError as exc:
         raise InvalidRequest("the request body is not valid JSON") from exc
     if not isinstance(payload, dict):
         raise InvalidRequest("the request body must be a JSON object")
@@ -139,6 +162,8 @@ def build_app(
                 return _error(403, "csrf", "this request did not come from the console")
             try:
                 return await handler(request)
+            except RequestTooLarge as exc:
+                return _error(413, "too_large", str(exc))
             except InvalidRequest as exc:
                 return _error(400, "invalid_request", str(exc))
             except InvalidChange as exc:
@@ -608,7 +633,7 @@ def build_app(
         )
 
     async def forms_create(request: Request) -> Response:
-        saved = forms_service().create(await _body(request))
+        saved = forms_service().create(await _body(request, limit=MAX_RECORD_BODY_BYTES))
         return _json({"record": record_view(saved)}, 201)
 
     async def forms_get(request: Request) -> Response:
@@ -619,7 +644,9 @@ def build_app(
         return _json({"record": record_view(record)})
 
     async def forms_update(request: Request) -> Response:
-        saved = forms_service().update(request.path_params["slug"], await _body(request))
+        saved = forms_service().update(
+            request.path_params["slug"], await _body(request, limit=MAX_RECORD_BODY_BYTES)
+        )
         return _json({"record": record_view(saved)})
 
     async def forms_delete(request: Request) -> Response:
@@ -754,4 +781,11 @@ def build_app(
 
     app = Starlette(routes=routes)
     app.add_middleware(BaseHTTPMiddleware, dispatch=harden)
+    if settings.forwarded_allow_ips:
+        # Behind a reverse proxy every connection comes from the proxy, so the
+        # login lockout would be shared by every visitor. Believe the proxy's
+        # X-Forwarded-For -- and only from the addresses an operator named.
+        from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
+        return ProxyHeadersMiddleware(app, trusted_hosts=settings.forwarded_allow_ips)  # type: ignore[return-value]
     return app

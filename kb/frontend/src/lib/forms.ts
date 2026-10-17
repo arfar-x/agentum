@@ -106,13 +106,14 @@ export function toInput(form: FormState): FormInput {
 }
 
 /** What the editor can check before asking; the server checks again. */
-export function problems(form: FormState, isNew: boolean): string[] {
+export function problems(form: FormState, isNew: boolean, maxBytes?: number): string[] {
   const found: string[] = [];
   if (isNew && !/^[a-z0-9]([a-z0-9-]{0,78}[a-z0-9])?$/.test(form.slug.trim())) {
     found.push('The slug needs lowercase letters, digits and "-" (at most 80 characters).');
   }
   if (!Object.values(form.title).some((t) => t.trim())) found.push('Give it a title in at least one language.');
   if (!form.body.trim()) found.push('Write the record’s text.');
+  if (maxBytes !== undefined && byteLength(form.body) > maxBytes) found.push('The text is longer than the catalog keeps; shorten it.');
   return found;
 }
 

@@ -14,6 +14,7 @@ from typing import Mapping, Protocol, Sequence, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from kb.domain.content import DEFAULT_RAW_CONTENT_MAX_BYTES
 from kb.domain.entry import EntryType
 
 SLUG = re.compile(r"^[a-z0-9][a-z0-9-]{0,78}[a-z0-9]$|^[a-z0-9]$")
@@ -47,6 +48,18 @@ class FormRecord(BaseModel):
     def _slug(cls, value: str) -> str:
         if not SLUG.match(value):
             raise ValueError("use lowercase letters, digits and '-' (at most 80 characters)")
+        return value
+
+    @field_validator("body")
+    @classmethod
+    def _fits(cls, value: str) -> str:
+        # What is saved is what agents read: the catalog keeps a record's text up
+        # to this size (spec §6.10) and would cut the rest without saying so.
+        size = len(value.encode("utf-8"))
+        if size > DEFAULT_RAW_CONTENT_MAX_BYTES:
+            raise ValueError(
+                f"the text is {size:,} bytes; at most {DEFAULT_RAW_CONTENT_MAX_BYTES:,} are kept"
+            )
         return value
 
     @field_validator("title", "summary")

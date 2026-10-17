@@ -31,6 +31,7 @@ CSRF_HEADER = "x-kb-admin"
 
 LOGIN_WINDOW_SECONDS = 300
 LOGIN_ATTEMPTS = 5
+MAX_TRACKED_CLIENTS = 10_000
 
 
 def _b64(data: bytes) -> str:
@@ -95,15 +96,26 @@ class Auth:
     # -- throttling failed logins -------------------------------------------
     def locked_out(self, client: str) -> int:
         """Seconds until this client may try again; 0 if it may now."""
-        attempts = self._failures[client]
+        attempts = self._failures.get(client)
+        if not attempts:
+            return 0
         cutoff = self._now() - LOGIN_WINDOW_SECONDS
         while attempts and attempts[0] < cutoff:
             attempts.popleft()
+        if not attempts:
+            del self._failures[client]  # a client that stopped guessing is forgotten
+            return 0
         if len(attempts) < LOGIN_ATTEMPTS:
             return 0
         return max(1, int(attempts[0] + LOGIN_WINDOW_SECONDS - self._now()))
 
     def record_failure(self, client: str) -> None:
+        if len(self._failures) >= MAX_TRACKED_CLIENTS:
+            # Bounded, so a flood of different addresses cannot grow this
+            # without end: the oldest are the ones whose window has passed.
+            cutoff = self._now() - LOGIN_WINDOW_SECONDS
+            for stale in [c for c, a in self._failures.items() if not a or a[-1] < cutoff]:
+                del self._failures[stale]
         self._failures[client].append(self._now())
 
     def clear_failures(self, client: str) -> None:

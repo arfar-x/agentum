@@ -113,6 +113,30 @@ it is operational state, not catalog content, so none of it is rebuilt by a
 sync: **`form_record` (manual records) and `kb_source_revision` (the source
 configuration's history) are only in the `kb_data` backup.**
 
+**Retention.** `sync_run` and `sync_request` grow by about a hundred small rows
+per source per day and are never pruned. That is years of headroom, but if you
+want them trimmed:
+
+```bash
+docker compose exec kb-db psql -U "$KB_POSTGRES_USER" "$KB_POSTGRES_DB" -c \
+  "DELETE FROM sync_request WHERE finished_at < now() - interval '180 days';
+   DELETE FROM sync_run WHERE finished_at < now() - interval '180 days';"
+```
+
+(`kb_source_revision` is the source configuration's history; keep it.)
+
+**If `config/kb-sources.yaml` is damaged.** The console verifies every write
+and puts the old file back if it cannot complete one, so this takes a crash in
+the middle of a write or a hand edit gone wrong. The scheduler skips a file it
+cannot read and says so; the console's Sources page shows the error. Every
+change the console ever made, with the file before and after, is in
+*Sources → History*, and in the database:
+
+```bash
+docker compose exec kb-db psql -U "$KB_POSTGRES_USER" "$KB_POSTGRES_DB" -At -c \
+  "SELECT after_text FROM kb_source_revision ORDER BY id DESC LIMIT 1" > config/kb-sources.yaml
+```
+
 Restart order after an upgrade: `kb-db` first, then `mcp-kb` and
 `kb-scheduler` (and `kb-admin`, if you run it). All of them replace a lost
 database connection on their own, so `docker compose up -d` in any order works,

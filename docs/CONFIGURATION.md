@@ -107,7 +107,12 @@ Off unless started with `make kb-admin-up` (compose profile `admin`). See
 | `KB_ADMIN_PORT` / `KB_ADMIN_BIND` | no | `8324` / `127.0.0.1` | Where it is published. Widen the bind only behind a TLS proxy you control. |
 | `KB_ADMIN_COOKIE_SECURE` | no | `false` | Set `true` behind TLS so the session cookie is never sent in the clear. |
 | `KB_ADMIN_SESSION_HOURS` | no | `12` | How long a login lasts. |
+| `KB_ADMIN_FORWARDED_ALLOW_IPS` | no | empty | The address of a reverse proxy in front of the console (comma separated; `*` trusts everyone, do not). Only from these is `X-Forwarded-For` believed. Without it, behind a proxy, every visitor is the proxy: five wrong guesses from anyone lock the login for everyone. Also have the proxy pass `Host` unchanged -- the console compares it with the browser's `Origin` -- and set `KB_ADMIN_COOKIE_SECURE=true`. |
 | `KB_ADMIN_USER` | no | `0:0` | The user the container runs as. It rewrites the bind-mounted `config/kb-sources.yaml` in place, which a host-owned file only allows as root; set the file's owner here (e.g. `1000:1000`) to avoid that. |
+
+`KB_ADMIN_DB_PASSWORD` is put into a connection URL by `docker-compose.yml`, so
+use letters and digits (what `generate-secrets.sh` makes); a hand-picked one
+with `@ / : ? #` breaks the URL.
 
 The console reads `KB_SUMMARIZER_*` and `KB_SUMMARY_LANGUAGES` too (for "generate
 summary" and the languages of a record). It is given no source credentials.

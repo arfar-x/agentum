@@ -209,6 +209,7 @@ case.
 | FR-CFG-10 | The admin console MUST change the source configuration only in two steps: a preview that validates the edited file with the same models the scheduler loads it with and returns a readable diff and warnings, then an apply that carries the preview's file fingerprint and an explicit confirmation. A changed fingerprint MUST refuse the apply. Nothing invalid MUST be savable. | done |
 | FR-CFG-11 | An edit made from the console MUST preserve the file's comments and its `${VAR}` placeholders, MUST NOT write a resolved value, and MUST NOT accept a literal credential where a variable name is expected (FR-CFG-04). | done |
 | FR-CFG-12 | Every change to the source configuration MUST be kept as a revision (what, when, before and after), and a change made to the file by hand MUST be detected and recorded the same way. The database copy of the sources MUST never override the file: the file is what the scheduler reads. | done |
+| FR-CFG-13 | A write of the source configuration MUST be verified by reading the file back. If it cannot be completed or does not read back as written (a full disk, a failing mount), the previous content MUST be put back and the failure reported, so the scheduler is never left with a half-written file. | done |
 
 ### 6.7 Front doors — `FR-CLI`, `FR-MCP`
 
@@ -303,6 +304,7 @@ catalog -- the console asks it to, through a queue (FR-SCH-11). Designed in
 | FR-ADM-16 | An operator MUST be able to retire the entries of a source that is no longer configured, so they stop appearing in search. Retiring is the soft delete of FR-REC-05 -- the entries are reported, not erased, and come back if the source returns -- and removes their stored text (FR-CNT-06). Deleting a source from the console MUST say that its entries otherwise stay searchable, and offer to retire them. | done |
 | FR-ADM-15 | No response MUST contain the value of an environment variable, a token or a password; a credential is reported only as set or not set. | done |
 | FR-ADM-17 | The console's health check MUST fail when the database cannot be reached, so a console holding a dead connection is not reported healthy. | done |
+| FR-ADM-18 | A request body MUST be bounded: 1 MiB for every endpoint except saving a record, and for that the size the catalog keeps plus room for the JSON around it; a larger one MUST be refused (413) without being read in full. A record's text MUST NOT exceed the size the catalog keeps (§6.10), so what an operator saves is what agents read. | done |
 
 ## 7. Non-functional requirements
 
@@ -498,7 +500,7 @@ which a flat catalog cannot answer.
 | Version | Date | Change |
 |---|---|---|
 | 1.0.0 | 2026-09-24 | First specification. Phases 1–3 implemented against it. |
-| 2.9.0 | 2026-10-17 | Production hardening of the admin console and its neighbours: NFR-DEP-09 (a lost database connection is replaced, not fatal -- before this, a database restart left the scheduler, console and MCP server failing until restarted by hand) and FR-ADM-17 (health reflects the database). |
+| 2.9.0 | 2026-10-17 | Production hardening of the admin console and its neighbours: NFR-DEP-09 (a lost database connection is replaced, not fatal -- before this, a database restart left the scheduler, console and MCP server failing until restarted by hand) FR-ADM-17 (health reflects the database) and FR-ADM-18 (bounded request bodies; a record's text fits what is kept) and FR-CFG-13 (a configuration write is verified, and undone if it fails). |
 | 2.8.0 | 2026-10-14 | Added §6.11 (FR-ADM-01..16), FR-SCH-08..13, FR-CFG-10..12, FR-CLI-06, FR-SRC-07 and NFR-DEP-08: an admin console for the operator, in its own opt-in service. It reads run history and the catalog, queues syncs for the scheduler to run, edits the source configuration after an explicit approval, and holds manual `form` records with on-demand summaries. FR-ENT-02 now admits the catalog's own `form` kind; N2 and §11 say what that does and does not change. Run history gained a start-of-run record, a status and the trigger, because "is it running now, and who asked" was not answerable from the end-of-run row alone. |
 | 2.7.0 | 2026-10-11 | Added FR-REC-13: a label-only change re-classifies the entry without re-summarizing. Adding or swapping a wiki label changes neither the page's text nor its version, so the content-hash gate treated it as unchanged and the entry kept its old type and tags until the text next changed. |
 | 2.6.0 | 2026-10-11 | FR-AGT-02 narrowed: the front door searches the catalog before answering itself, not before delegating. Found in a live trial of the product-spec flow: the front door searched, then handed off to a specialist that searched the same question again, before doing everything itself. The front door is now a router with no write tools; the specialist it hands to grounds the work (FR-AGT-03). |

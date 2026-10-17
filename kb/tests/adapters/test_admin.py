@@ -815,3 +815,53 @@ def test_health_follows_the_database(anon, world):
     down = anon.get("/health")
     assert down.status_code == 503
     assert "lost" not in down.text, "what the driver said is for the log, not the caller"
+
+
+def wrong_login(client, forwarded_for=None):
+    headers = {**CSRF, **({"X-Forwarded-For": forwarded_for} if forwarded_for else {})}
+    return client.post("/api/session", json={"token": "wrong" * 10}, headers=headers).status_code
+
+
+def test_behind_a_proxy_the_lockout_is_per_visitor_not_per_proxy(world):
+    # Covers: FR-ADM-02
+    behind = make_client(world, forwarded_allow_ips="testclient")
+    assert [wrong_login(behind, "203.0.113.9") for _ in range(6)] == [401] * 5 + [429]
+    assert wrong_login(behind, "198.51.100.7") == 401, "a different visitor is not locked out by it"
+
+
+def test_without_a_trusted_proxy_a_forwarded_address_is_not_believed(world):
+    # Covers: FR-ADM-02
+    direct = make_client(world)
+    results = [wrong_login(direct, f"203.0.113.{n}") for n in range(6)]
+    assert results == [401] * 5 + [429], "rotating X-Forwarded-For does not dodge the lockout"
+
+
+def test_a_proxy_that_is_not_trusted_is_not_believed_either(world):
+    # Covers: FR-ADM-02
+    other = make_client(world, forwarded_allow_ips="10.9.9.9")
+    results = [wrong_login(other, f"203.0.113.{n}") for n in range(6)]
+    assert results == [401] * 5 + [429]
+
+
+def test_the_lockout_forgets_clients_that_stopped_and_stays_bounded():
+    # Covers: FR-ADM-02
+    from kb.adapters.inbound.admin import auth as auth_module
+
+    clock = [1000.0]
+    auth = Auth("t" * 40, session_seconds=60, now=lambda: clock[0])
+    auth.record_failure("a")
+    clock[0] += auth_module.LOGIN_WINDOW_SECONDS + 1
+    assert auth.locked_out("a") == 0 and "a" not in auth._failures
+
+    for n in range(auth_module.MAX_TRACKED_CLIENTS + 50):
+        auth.record_failure(f"c{n}")
+        clock[0] += 0.001
+    clock[0] += auth_module.LOGIN_WINDOW_SECONDS + 1
+    auth.record_failure("late")
+    assert len(auth._failures) < 100
+
+
+def test_the_proxy_setting_is_read_from_the_environment():
+    # Covers: FR-ADM-02
+    assert AdminSettings.from_env({"KB_ADMIN_TOKEN": TOKEN}).forwarded_allow_ips == ""
+    assert AdminSettings.from_env({"KB_ADMIN_TOKEN": TOKEN, "KB_ADMIN_FORWARDED_ALLOW_IPS": "172.18.0.1"}).forwarded_allow_ips == "172.18.0.1"

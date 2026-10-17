@@ -34,8 +34,12 @@ from psycopg.rows import dict_row
 
 logger = logging.getLogger("kb.db")
 
-#: Idle this long and the connection is checked before it is trusted.
-PING_AFTER_SECONDS = 1.0
+#: Idle this long and the connection is checked before it is trusted. Short on
+#: purpose: a restart is over in well under a second, and a request that arrives
+#: just after it should not be the one that finds out. The check is one
+#: round trip, paid only after a pause -- the statements of one request, which
+#: follow each other within milliseconds, are not checked again.
+PING_AFTER_SECONDS = 0.25
 
 
 class ResilientConnection:
@@ -72,12 +76,18 @@ class ResilientConnection:
             idle = self._clock() - self._last_used
             self._last_used = self._clock()
             conn = self._conn
-            if not (conn.closed or conn.broken) and idle > self._ping_after:
+            lost = conn.closed or conn.broken
+            if not lost and idle > self._ping_after:
                 try:
                     conn.execute("SELECT 1")
                 except psycopg.Error:
-                    pass  # `broken` now says so, and the next check replaces it
-            if conn.closed or conn.broken:
+                    # Not only a dead socket: a server shutting down answers the
+                    # ping with an error ("terminating connection due to
+                    # administrator command") before the socket closes, and the
+                    # connection does not yet know it is finished. A ping that
+                    # fails means the connection is not to be used.
+                    lost = True
+            if lost:
                 logger.warning("the database connection was lost; reconnecting")
                 try:
                     conn.close()

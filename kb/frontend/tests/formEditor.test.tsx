@@ -130,9 +130,10 @@ describe('FormEditorModal', () => {
     expect(screen.getByLabelText(/^Title/)).toHaveAttribute('dir', 'ltr');
   });
 
-  it('counts the text in bytes and warns past the cap', async () => {
+  it('counts the text in bytes and will not save past the cap', async () => {
     open({ record: saved, maxBytes: 10 });
-    expect(screen.getByText(/of 10 B/)).toHaveTextContent(/the rest is cut/i);
+    expect(screen.getByText(/of 10 B/)).toHaveTextContent(/too long to save/i);
+    expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
   });
 
   it('previews the Markdown without running anything in it', async () => {

@@ -11,7 +11,7 @@
 # Node toolchain ships in the runtime image. `npm ci` installs exactly what
 # package-lock.json says; a build that cannot reproduce it fails instead of
 # quietly using something else.
-FROM node:22-alpine AS web
+FROM node:22.22-alpine AS web
 WORKDIR /web
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --no-audit --no-fund

@@ -52,7 +52,7 @@ export function FormEditorModal({ record, languages, entryTypes, summarizerConfi
   const [draftNote, setDraftNote] = useState<string | null>(null);
 
   const bytes = byteLength(form.body);
-  const found = problems(form, isNew);
+  const found = problems(form, isNew, maxBytes);
   const set = (change: Partial<FormState>) => setForm((current) => ({ ...current, ...change }));
 
   const setTitle = (language: string, text: string) => {
@@ -266,7 +266,7 @@ export function FormEditorModal({ record, languages, entryTypes, summarizerConfi
           )}
           <p className={`mt-1 text-[11px] ${bytes > maxBytes ? 'text-rose-300' : 'text-slate-500'}`}>
             {formatBytes(bytes)} of {formatBytes(maxBytes)}
-            {bytes > maxBytes ? ' — the rest is cut when the record is kept.' : ''}
+            {bytes > maxBytes ? ' — too long to save.' : ''}
           </p>
         </div>
 
