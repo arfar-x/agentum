@@ -101,7 +101,7 @@ def test_a_busy_connection_is_not_pinged_on_every_call():
     # Covers: NFR-DEP-09
     resilient, opened, clock = wire(FakeConnection("a"))
     for _ in range(5):
-        clock.now += 1
+        clock.now += PING_AFTER_SECONDS / 2
         resilient.cursor()
     assert opened[0].queries == []
 
