@@ -58,7 +58,7 @@ for what that means for rotating the underlying passwords.
 |---|---|---|
 | `mongodb_data` | users, conversations, **agent definitions**, MCP tool state | Total loss. This is the volume that matters most. |
 | `pgvector_data` | RAG embeddings for user-uploaded files | Re-upload and re-embed affected files. |
-| `kb_data` | The knowledge catalog: entries, overrides, sync checkpoints, gap log | The catalog and its search index rebuild from the sources (`make kb-sync`, once phase 6 lands); the **overrides, checkpoints and gap log do not** -- those are the reason this volume is backed up. |
+| `kb_data` | The knowledge catalog: entries, overrides, sync checkpoints, gap log, run history, and the admin console's **manual records** and source-configuration history | The catalog and its search index rebuild from the sources (`make kb-sync`); the **overrides, checkpoints, gap log, manual records and configuration history do not** -- those are the reason this volume is backed up. |
 | `meili_data` | search index | Rebuildable from Mongo; not backup-critical but included for convenience. |
 | `librechat_uploads` | user-uploaded files | Those files are gone. |
 | `librechat_images` | generated/attached images | Those images are gone. |
@@ -108,11 +108,42 @@ Schema changes live in `kb/migrations/` and are applied by `make kb-init`, which
 so an upgrade applies what is new and skips what is already recorded in
 `schema_migration`. Rerunning is a no-op.
 
+Migration `004_admin_console.sql` adds the admin console's tables. Everything in
+it is operational state, not catalog content, so none of it is rebuilt by a
+sync: **`form_record` (manual records) and `kb_source_revision` (the source
+configuration's history) are only in the `kb_data` backup.**
+
+**Retention.** `sync_run` and `sync_request` grow by about a hundred small rows
+per source per day and are never pruned. That is years of headroom, but if you
+want them trimmed:
+
+```bash
+docker compose exec kb-db psql -U "$KB_POSTGRES_USER" "$KB_POSTGRES_DB" -c \
+  "DELETE FROM sync_request WHERE finished_at < now() - interval '180 days';
+   DELETE FROM sync_run WHERE finished_at < now() - interval '180 days';"
+```
+
+(`kb_source_revision` is the source configuration's history; keep it.)
+
+**If `config/kb-sources.yaml` is damaged.** The console verifies every write
+and puts the old file back if it cannot complete one, so this takes a crash in
+the middle of a write or a hand edit gone wrong. The scheduler skips a file it
+cannot read and says so; the console's Sources page shows the error. Every
+change the console ever made, with the file before and after, is in
+*Sources → History*, and in the database:
+
+```bash
+docker compose exec kb-db psql -U "$KB_POSTGRES_USER" "$KB_POSTGRES_DB" -At -c \
+  "SELECT after_text FROM kb_source_revision ORDER BY id DESC LIMIT 1" > config/kb-sources.yaml
+```
+
 Restart order after an upgrade: `kb-db` first, then `mcp-kb` and
-`kb-scheduler` (both reconnect on their own, so `docker compose up -d` in any
-order works; the ordering only matters if you stop the database deliberately).
-The scheduler survives a database blip -- the tick fails, is logged, and the
-next one runs.
+`kb-scheduler` (and `kb-admin`, if you run it). All of them replace a lost
+database connection on their own, so `docker compose up -d` in any order works,
+and a database restart or failover needs nothing from you: a call that was cut
+off mid-way fails and is logged (a scheduler tick, one console request), and the
+next one reconnects. Only the `kb-admin` health check reports the outage
+meanwhile (503 until the database answers).
 
 ## Upgrades
 

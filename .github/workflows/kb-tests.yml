@@ -5,12 +5,16 @@ on:
     paths:
       - "kb/**"
       - "docs/spec/knowledge-base.md"
+      - "docker-compose.yml"
+      - ".env.example"
       - ".github/workflows/kb-tests.yml"
   push:
     branches: [main]
     paths:
       - "kb/**"
       - "docs/spec/knowledge-base.md"
+      - "docker-compose.yml"
+      - ".env.example"
       - ".github/workflows/kb-tests.yml"
 
 permissions:
@@ -55,6 +59,39 @@ jobs:
 
       # Every extra: the suite imports the adapters (psycopg, requests/yaml,
       # fastmcp), so collection fails without them.
-      - run: pip install -e '.[dev,store,sources,mcp]'
+      - run: pip install -e '.[dev,store,sources,mcp,admin]'
 
       - run: python -m pytest
+
+  # The compose file still parses with every optional profile on. `docker
+  # compose config` needs no daemon, and catches a variable renamed in one
+  # place and not the other before `make up` does.
+  compose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          { cat .env.example; bash scripts/generate-secrets.sh | grep -E '^[A-Z_]+='; echo RAG_EMBEDDINGS_MODEL=dummy; } > .env
+          docker compose --profile admin --profile webhook config -q
+
+  # The admin console's web app (kb/frontend): types, unit tests, and a
+  # production build -- the same `npm run build` the image runs, so a build that
+  # would fail `docker compose build` fails here first.
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: kb/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: kb/frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build

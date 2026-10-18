@@ -18,17 +18,28 @@ and the next cadence is attempted (FR-SCH-03).
 from __future__ import annotations
 
 import logging
+import os
 import signal
 import threading
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 
+from kb.application.ports.heartbeat import Heartbeat
+from kb.application.ports.sync_queue import (
+    ALL_SOURCES,
+    RequestKind,
+    RequestStatus,
+    SyncRequest,
+)
 from kb.application.use_cases.refresh_entries import RefreshEntries
+from kb.application.use_cases.run_recorder import RunRecorder
 from kb.application.use_cases.schedule import Job, JobKind, ScheduleState, due
 from kb.application.use_cases.sync_source import Mode
 from kb.domain.content import ContentPolicy
-from kb.sources_config import ConfigError, SourcesConfig, load
+from kb.domain.runs import Trigger
+from kb.sources_config import FORM_SOURCE_ID, ConfigError, SourcesConfig, load
 
 logger = logging.getLogger("kb.scheduler")
 
@@ -43,6 +54,25 @@ TICK_SECONDS = 10.0
 SUMMARIZER_VERDICT_TTL = timedelta(seconds=60)
 
 
+@dataclass
+class _Result:
+    """What one execution leaves behind, for the run's record."""
+
+    counts: dict[str, int] = field(default_factory=dict)
+    rejected: tuple[str, ...] = ()
+    checkpoint: str | None = None
+
+
+@dataclass
+class _Outcome:
+    run_id: int | None
+    error: str | None
+
+
+#: Left on a request that was running when the scheduler died.
+REQUEST_INTERRUPTED = "the scheduler stopped before this request finished"
+
+
 class Scheduler:
     def __init__(
         self,
@@ -51,6 +81,7 @@ class Scheduler:
         sources_file: Path,
         tick_seconds: float = TICK_SECONDS,
         check_summarizer: Callable[[], dict[str, Any]] | None = None,
+        environ: Mapping[str, str] | None = None,
     ) -> None:
         self._container = container
         self._sources_file = sources_file
@@ -58,15 +89,38 @@ class Scheduler:
         #: None when no summarizer is configured: entries are then catalogued
         #: under their real titles, a deliberate and already-reported mode.
         self._check_summarizer = check_summarizer
+        self._environ = os.environ if environ is None else environ
         self._verdict: tuple[datetime, str | None] | None = None
         self._state = ScheduleState()
         self._stop = threading.Event()
+        self._started = False
+        #: What the heartbeat says, refreshed by each tick and re-stamped by the
+        #: thread that keeps beating while a long job holds the tick.
+        self._pulse: Heartbeat | None = None
+        self._working_on: str | None = None
+        #: The tick thread and the heartbeat thread both write the pulse, over
+        #: one connection; one at a time, so their statements cannot interleave.
+        self._pulse_lock = threading.Lock()
+        #: When the manual records were last found out of step with the catalog
+        #: and published, so a persistent failure is retried, not hammered.
+        self._forms_attempted: datetime | None = None
+        # Optional collaborators: a container without them (a unit test of one
+        # concern) simply has no history, queue or heartbeat.
+        self._runs = getattr(container, "runs", None)
+        self._queue = getattr(container, "queue", None)
+        self._heartbeats = getattr(container, "heartbeats", None)
+        self._recorder = RunRecorder(self._runs, container.clock)
 
     # -- the loop ----------------------------------------------------------
     def run_forever(self) -> None:
         for sig in (signal.SIGTERM, signal.SIGINT):
             signal.signal(sig, lambda *_: self.stop())
         logger.info("scheduler started; reading %s", self._sources_file)
+        # A long sync holds the tick for minutes; the console must not read that
+        # as a dead scheduler. Beating from its own thread, on its own database
+        # connection, keeps the pulse honest in both directions: it stops when
+        # the process does.
+        threading.Thread(target=self._beat_forever, name="kb-heartbeat", daemon=True).start()
         while not self._stop.is_set():
             try:
                 self.tick(self._now())
@@ -85,14 +139,45 @@ class Scheduler:
         clock = getattr(self._container, "clock", None)
         return clock.now() if clock is not None else datetime.now(timezone.utc)
 
+    # -- startup -----------------------------------------------------------
+    def _start(self, now: datetime) -> None:
+        """Once, before the first tick: recover from the last process's death
+        and learn when each cadence last ran (FR-SCH-08, FR-SCH-10)."""
+        if self._started:
+            return
+        self._started = True
+        last_run: dict[str, datetime] = {}
+        try:
+            if self._runs is not None:
+                closed = self._runs.close_interrupted(at=now)
+                if closed:
+                    logger.warning("closed %d run(s) the previous scheduler never finished", closed)
+                last_run = dict(self._runs.last_scheduled())
+            if self._queue is not None:
+                self._queue.fail_running(at=now, error=REQUEST_INTERRUPTED)
+        except Exception:
+            logger.exception("could not recover state from the run history; starting fresh")
+        self._state = ScheduleState(last_run=last_run, since=now)
+
     def tick(self, now: datetime) -> list[Job]:
         """Run whatever is due. Returns the jobs it ran, for tests and logs."""
+        self._start(now)
+        config: SourcesConfig | None
         try:
             config = load(self._sources_file)
-        except ConfigError as exc:
+            config_error = None
+        except (ConfigError, OSError, UnicodeDecodeError) as exc:
             # A file being edited right now is the normal case for this, so it
-            # is a warning and a skipped tick, not a crash loop.
+            # is a warning and a skipped tick, not a crash loop. Whatever is
+            # wrong with it, the heartbeat and the request queue still run.
             logger.warning("not scheduling: %s", exc)
+            config, config_error = None, str(exc)
+
+        self._beat(now, config, config_error)
+        # What a person asked for goes first: somebody is waiting on it.
+        self._serve_requests(config, config_error)
+        self._publish_pending_forms(now)
+        if config is None:
             return []
 
         jobs = due(config, self._state, now)
@@ -100,37 +185,134 @@ class Scheduler:
             self._run(job, config, now)
         return jobs
 
-    # -- running one job ---------------------------------------------------
+    # -- the pulse ---------------------------------------------------------
+    def _beat(self, now: datetime, config: SourcesConfig | None, config_error: str | None) -> None:
+        if self._heartbeats is None:
+            return
+        from kb.adapters.outbound.source_factory import credential_presence
+
+        summarizer, summarizer_error = "none", None
+        if self._check_summarizer is not None:
+            if self._verdict is None:
+                summarizer = "unknown"
+            elif self._verdict[1] is None:
+                summarizer = "ok"
+            else:
+                summarizer, summarizer_error = "failing", self._verdict[1]
+
+        self._pulse = Heartbeat(
+            beat_at=now,
+            approved=config.approved if config else True,
+            approved_from=config.approved_from if config else "default",
+            summarizer=summarizer,
+            summarizer_error=summarizer_error,
+            credentials=(
+                {s.id: credential_presence(s, self._environ) for s in config.sources}
+                if config
+                else {}
+            ),
+            config_error=config_error,
+            working_on=self._working_on,
+        )
+        self._write_pulse(self._pulse)
+
+    def _write_pulse(self, pulse: Heartbeat) -> None:
+        try:
+            with self._pulse_lock:
+                self._heartbeats.beat(pulse)
+        except Exception:
+            logger.exception("could not write the heartbeat")
+
+    def _beat_forever(self) -> None:  # pragma: no cover -- a thread around _write_pulse
+        while not self._stop.wait(self._tick):
+            if self._pulse is not None:
+                self._write_pulse(
+                    self._pulse.model_copy(
+                        update={"beat_at": self._now(), "working_on": self._working_on}
+                    )
+                )
+
+    # -- running one scheduled job -----------------------------------------
     def _run(self, job: Job, config: SourcesConfig, now: datetime) -> None:
         key = ScheduleState.key(job.kind, job.source_id)
+        if job.source_id and self._elsewhere_running(job.source_id):
+            # The CLI (or another scheduler) is syncing this source right now:
+            # FR-SCH-05. Not recorded as a run and `last_run` is untouched, so
+            # the next tick tries again.
+            logger.info("%s %s skipped: a run is already in progress", job.kind.value, job.source_id)
+            return
         self._state = self._state.model_copy(
             update={"running": self._state.running | {key}}
         )
-        started = now
-        error: str | None = None
-        counts: dict[str, int] = {}
-
         try:
             logger.info("%s %s (%s)", job.kind.value, job.source_id or "", job.reason)
-            counts = self._execute(job, config)
-        except Exception as exc:
-            error = str(exc)
-            logger.exception("%s for %s failed", job.kind.value, job.source_id)
+            self._perform(
+                mechanism=job.kind.value,
+                source_id=job.source_id,
+                config=config,
+                triggered_by=Trigger.SCHEDULED,
+            )
         finally:
-            # The container's clock, not the wall clock: mixing the two makes a
-            # run's duration nonsense the moment time is injected, and the only
-            # place that shows up is a test.
-            finished = self._now()
             # `last_run` moves whether the job succeeded or not: retrying a
             # broken source every ten seconds would hammer it and bury every
             # other job's log line.
             self._state = self._state.model_copy(
                 update={
                     "running": self._state.running - {key},
-                    "last_run": {**self._state.last_run, key: started},
+                    "last_run": {**self._state.last_run, key: now},
                 }
             )
-            self._record(job, started, finished, counts, error)
+
+    def _elsewhere_running(self, source_id: str) -> bool:
+        if self._runs is None:
+            return False
+        try:
+            return source_id in self._runs.running_sources()
+        except Exception:
+            logger.exception("could not ask which runs are in progress")
+            return False
+
+    def _perform(
+        self,
+        *,
+        mechanism: str,
+        source_id: str | None,
+        config: SourcesConfig | None,
+        triggered_by: Trigger,
+        mode: str | None = None,
+        dry_run: bool = False,
+        forced: bool = False,
+    ) -> _Outcome:
+        """One run, recorded at both ends. A failure becomes the run's error."""
+        label = source_id or "*"
+        self._working_on = f"{mechanism} {label}"
+        run_id = self._recorder.begin(
+            source_id=label,
+            mechanism=mechanism,
+            triggered_by=triggered_by,
+            mode=mode,
+            dry_run=dry_run,
+            forced=forced,
+        )
+        result, error = _Result(), None
+        try:
+            result = self._execute(
+                mechanism, source_id, config, mode=mode, dry_run=dry_run, forced=forced,
+                manual=triggered_by is not Trigger.SCHEDULED,
+            )
+        except Exception as exc:
+            error = str(exc) or type(exc).__name__
+            logger.exception("%s for %s failed", mechanism, label)
+        finally:
+            self._working_on = None
+        self._recorder.end(
+            run_id,
+            counts=result.counts,
+            rejected=result.rejected,
+            checkpoint=result.checkpoint,
+            error=error,
+        )
+        return _Outcome(run_id, error)
 
     def _require_usable_summarizer(self) -> None:
         """FR-SCH-07: the check `sync` applies (FR-CFG-09), before a run that
@@ -154,55 +336,166 @@ class Scheduler:
                 f"undescribed (see `kb check`): {problem}"
             )
 
-    def _execute(self, job: Job, config: SourcesConfig) -> dict[str, int]:
-        self._require_usable_summarizer()
-        if job.kind is JobKind.LAZY_REFRESH:
+    def _execute(
+        self,
+        mechanism: str,
+        source_id: str | None,
+        config: SourcesConfig | None,
+        *,
+        mode: str | None,
+        dry_run: bool,
+        forced: bool,
+        manual: bool,
+    ) -> _Result:
+        if mechanism == "purge":
+            purged = self._container.store.purge_content(source_id or "")
+            return _Result(counts={"content_purged": purged})
+        if mechanism == "retire":
+            # The soft delete a full pass gives a vanished document (FR-REC-05),
+            # for every entry of a source nothing will ever sync again. Kept
+            # text goes with each entry (FR-CNT-06).
+            store = self._container.store
+            retired = store.mark_missing(
+                store.ids_for_source(source_id or ""), at=self._container.clock.now()
+            )
+            return _Result(counts={"missing": retired})
+
+        if source_id == FORM_SOURCE_ID and mechanism != JobKind.LAZY_REFRESH.value:
+            return self._publish_forms(dry_run=dry_run, forced=forced)
+        if config is None:
+            raise RuntimeError("the source configuration cannot be read (see the heartbeat)")
+        if manual:
+            # A scheduled run never gets here with syncing off (`due` returns
+            # nothing); a requested one must be refused the same way.
+            config.require_approved()
+        if not dry_run:
+            self._require_usable_summarizer()
+
+        if mechanism == JobKind.LAZY_REFRESH.value:
             report = self._refresher(config).execute()
             if report.failed:
                 logger.warning("refresh failures: %s", "; ".join(report.failed))
-            return {"updated": report.refreshed, "unchanged": report.unchanged}
+            return _Result(counts={"updated": report.refreshed, "unchanged": report.unchanged})
 
         from kb.adapters.outbound.source_factory import build_source
 
-        source_config = config.source(job.source_id or "")
+        source_config = config.source(source_id or "")
         source = build_source(source_config)
-        mode = Mode.FULL if job.kind is JobKind.FULL_SCRAPE else Mode.INCREMENTAL
+        sync_mode = Mode.FULL if mechanism == JobKind.FULL_SCRAPE.value else Mode.INCREMENTAL
         checkpoint = self._container.store.get_checkpoint(source.source_id)
 
         report = self._container.sync.execute(
             source,
-            mode=mode,
+            mode=sync_mode,
+            dry_run=dry_run,
+            force=forced,
             checkpoint=checkpoint,
             content=config.content_policy_for(source_config),
         )
-        if report.checkpoint:
+        if report.checkpoint and not dry_run:
             # Only after the run returned: a checkpoint advanced past a failure
             # would skip whatever that run never saw.
             self._container.store.set_checkpoint(source.source_id, report.checkpoint)
         if report.rejected:
             logger.warning("%s rejected %d documents: %s", source.source_id,
                            len(report.rejected), "; ".join(report.rejected[:5]))
-        return {
-            "created": report.created,
-            "updated": report.updated,
-            "unchanged": report.unchanged,
-            "revived": report.revived,
-            "missing": report.missing,
-            "summarized": report.summarized,
-            "content_stored": report.content_stored,
-            "content_purged": report.content_purged,
-        }
+        return _Result(
+            counts=report.model_dump(
+                include={
+                    "seen", "created", "updated", "unchanged", "revived", "missing",
+                    "summarized", "content_stored", "content_purged",
+                }
+            ),
+            rejected=report.rejected,
+            checkpoint=report.checkpoint,
+        )
+
+    #: How often an out-of-step set of manual records is retried.
+    FORMS_RETRY = timedelta(seconds=60)
+
+    def _publish_pending_forms(self, now: datetime) -> None:
+        """Bring the manual records in step with the catalog when a request to do
+        so was lost (a scheduler restarted mid-request, a failed enqueue): the
+        records are the source of truth, and nothing else would ever notice that
+        a save or a delete had not arrived (FR-SRC-07). Checked every tick, cheap
+        when nothing is wrong, and retried at most once a minute when it is."""
+        forms = getattr(self._container, "forms", None)
+        if forms is None or self._elsewhere_running(FORM_SOURCE_ID):
+            return
+        if self._forms_attempted and now - self._forms_attempted < self.FORMS_RETRY:
+            return
+        try:
+            records = {r.slug: r for r in forms.list()}
+            store = self._container.store
+            live = store.ids_for_source(FORM_SOURCE_ID)
+            from kb.domain.identity import entry_id_for
+
+            stale = bool(live - {entry_id_for(FORM_SOURCE_ID, slug) for slug in records})
+            if not stale:
+                for slug, record in records.items():
+                    entry = store.get(entry_id_for(FORM_SOURCE_ID, slug))
+                    if entry is None or entry.deleted_at is not None or entry.source_version != str(record.revision):
+                        stale = True
+                        break
+        except Exception:
+            logger.exception("could not compare the manual records with the catalog")
+            return
+        if not stale:
+            return
+        self._forms_attempted = now
+        logger.info("the manual records are out of step with the catalog; publishing them")
+        self._perform(
+            mechanism=JobKind.FULL_SCRAPE.value,
+            source_id=FORM_SOURCE_ID,
+            config=None,
+            triggered_by=Trigger.SCHEDULED,
+            mode=Mode.FULL.value,
+        )
+
+    def _publish_forms(self, *, dry_run: bool, forced: bool) -> _Result:
+        """The manual records, through the same funnel as any source.
+
+        Neither the `approved` switch nor the summarizer gate applies: nothing
+        here touches an outside system, and an operator-approved summary is
+        used as written -- the model is not asked (FR-SRC-07, FR-ADM-13). A
+        full pass always, so a deleted record is noticed. Works with an
+        unreadable source file too: it does not depend on one.
+        """
+        from kb.adapters.outbound.form_source import FormKnowledgeSource
+
+        source = FormKnowledgeSource(self._container.forms)
+        report = self._container.sync.execute(
+            source,
+            mode=Mode.FULL,
+            dry_run=dry_run,
+            force=forced,
+            content=ContentPolicy(store=True),  # always: this is how agents read them
+        )
+        return _Result(
+            counts=report.model_dump(
+                include={
+                    "seen", "created", "updated", "unchanged", "revived", "missing",
+                    "summarized", "content_stored", "content_purged",
+                }
+            ),
+            rejected=report.rejected,
+        )
 
     def _refresher(self, config: SourcesConfig) -> RefreshEntries:
+        from kb.adapters.outbound.form_source import FormKnowledgeSource
         from kb.adapters.outbound.source_factory import build_source
 
         def resolve(source_id: str):
+            if source_id == FORM_SOURCE_ID:
+                return FormKnowledgeSource(self._container.forms)
             for source in config.enabled_sources():
                 if source.id == source_id:
                     return build_source(source)
             return None
 
         def resolve_content(source_id: str) -> ContentPolicy:
+            if source_id == FORM_SOURCE_ID:
+                return ContentPolicy(store=True)
             for source in config.sources:
                 if source.id == source_id:
                     return config.content_policy_for(source)
@@ -216,27 +509,83 @@ class Scheduler:
             resolve_content=resolve_content,
         )
 
-    def _record(
-        self,
-        job: Job,
-        started: datetime,
-        finished: datetime,
-        counts: dict[str, int],
-        error: str | None,
-    ) -> None:
+    # -- requests from the console (FR-SCH-11) ------------------------------
+    def _serve_requests(self, config: SourcesConfig | None, config_error: str | None) -> None:
+        if self._queue is None:
+            return
+        while not self._stop.is_set():
+            try:
+                request = self._queue.claim_next(at=self._now())
+            except Exception:
+                logger.exception("could not read the request queue")
+                return
+            if request is None:
+                return
+            self._serve(request, config, config_error)
+
+    def _serve(self, request: SyncRequest, config: SourcesConfig | None, config_error: str | None) -> None:
+        run_ids: list[int] = []
+        errors: list[str] = []
         try:
-            self._container.store.record_run(
-                source_id=job.source_id or "*",
-                mechanism=job.kind.value,
-                started_at=started,
-                finished_at=finished,
-                counts=counts,
-                error=error,
+            for target in self._targets(request, config):
+                if self._elsewhere_running(target):
+                    errors.append(f"{target}: a run is already in progress")
+                    continue
+                if request.kind in (RequestKind.PURGE_CONTENT, RequestKind.RETIRE_SOURCE):
+                    outcome = self._perform(
+                        mechanism="purge" if request.kind is RequestKind.PURGE_CONTENT else "retire",
+                        source_id=target,
+                        config=config,
+                        triggered_by=Trigger.MANUAL,
+                    )
+                else:
+                    full = request.mode == Mode.FULL.value
+                    outcome = self._perform(
+                        mechanism=JobKind.FULL_SCRAPE.value if full else JobKind.INCREMENTAL.value,
+                        source_id=target,
+                        config=config,
+                        triggered_by=Trigger.MANUAL,
+                        mode=Mode.FULL.value if full else Mode.INCREMENTAL.value,
+                        dry_run=request.dry_run,
+                        forced=request.forced,
+                    )
+                if outcome.run_id is not None:
+                    run_ids.append(outcome.run_id)
+                if outcome.error:
+                    errors.append(f"{target}: {outcome.error}")
+        except Exception as exc:
+            errors.append(str(exc) or type(exc).__name__)
+            logger.exception("request %s failed", request.id)
+        if config is None and not run_ids and not errors:
+            errors.append(f"the source configuration cannot be read: {config_error}")
+        try:
+            self._queue.finish_request(
+                request.id,
+                at=self._now(),
+                status=RequestStatus.FAILED if errors else RequestStatus.DONE,
+                run_ids=run_ids,
+                error="; ".join(errors) or None,
             )
         except Exception:
-            # Losing the history of a run is bad; losing the scheduler because
-            # we failed to write that history is worse.
-            logger.exception("could not record the run")
+            logger.exception("could not record the outcome of request %s", request.id)
+
+    def _targets(self, request: SyncRequest, config: SourcesConfig | None) -> list[str]:
+        if request.source_id != ALL_SOURCES:
+            return [request.source_id]
+        configured = [source.id for source in config.enabled_sources()] if config else []
+        # The built-in source has no entry in the file, so "everything" must
+        # name it itself; it is cheap and does nothing when nothing changed.
+        return [*configured, FORM_SOURCE_ID] if self._has_forms() else configured
+
+    def _has_forms(self) -> bool:
+        forms = getattr(self._container, "forms", None)
+        if forms is None:
+            return False
+        try:
+            return bool(forms.list()) or bool(self._container.store.ids_for_source(FORM_SOURCE_ID))
+        except Exception:
+            logger.exception("could not look for manual records")
+            return False
 
 
 def main() -> None:  # pragma: no cover -- the container's entrypoint

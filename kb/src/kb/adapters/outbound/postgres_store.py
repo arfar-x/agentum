@@ -31,6 +31,7 @@ from typing import Iterable, Sequence
 import psycopg
 from psycopg.rows import dict_row
 
+from kb.adapters.outbound.postgres_connection import ResilientConnection
 from kb.application.ports.entry_store import ContentSlice
 from kb.domain.content import RawContent
 from kb.domain.entry import Entry, EntryType
@@ -103,6 +104,12 @@ class PostgresEntryStore:
         self._connection = connection
         self._connection.row_factory = dict_row
 
+    @property
+    def connection(self) -> psycopg.Connection:
+        """For the other stores over the same database (run history, the request
+        queue): one connection per process, not one per concern."""
+        return self._connection
+
     @classmethod
     def connect(cls, dsn: str, *, connect_timeout: int = 5) -> "PostgresEntryStore":
         """A search must fail fast rather than hang a tool call, so the connect
@@ -116,10 +123,15 @@ class PostgresEntryStore:
         a real BEGIN/COMMIT. It also stops a long-lived reader (the MCP server)
         from holding a transaction open between tool calls.
         """
-        return cls(psycopg.connect(dsn, connect_timeout=connect_timeout, autocommit=True))
+        return cls(ResilientConnection.to(dsn, connect_timeout=connect_timeout))
 
     def close(self) -> None:
         self._connection.close()
+
+    def ping(self) -> None:
+        """Raises if the database cannot be reached: what a health check asks."""
+        with self._connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
 
     # -- schema ------------------------------------------------------------
     def migrate(self, migrations_dir: Path | None = None) -> list[str]:
@@ -501,6 +513,42 @@ class PostgresEntryStore:
             "checkpoints": checkpoints,
         }
 
+    # -- read models for the admin console ----------------------------------
+    def content_by_source(self) -> dict[str, dict[str, int]]:
+        """Kept text per source: how many documents and how many bytes."""
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT e.source_id,
+                       count(*)                                AS documents,
+                       coalesce(sum(octet_length(c.body)), 0)  AS text_bytes
+                  FROM entry_content c JOIN entry e ON e.id = c.entry_id
+                 GROUP BY e.source_id
+                """
+            )
+            return {
+                row["source_id"]: {"documents": row["documents"], "text_bytes": int(row["text_bytes"])}
+                for row in cursor.fetchall()
+            }
+
+    def refresh_queue_summary(self, *, max_attempts: int = 5, failures: int = 20) -> dict[str, object]:
+        """What readers asked to have refreshed, and what keeps failing."""
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT count(*) FILTER (WHERE attempts < %(max)s) AS pending,"
+                "       count(*) FILTER (WHERE attempts >= %(max)s) AS gave_up"
+                "  FROM refresh_queue",
+                {"max": max_attempts},
+            )
+            counts = dict(cursor.fetchone())
+            cursor.execute(
+                "SELECT entry_id, attempts, last_error, requested_at FROM refresh_queue"
+                " WHERE last_error IS NOT NULL ORDER BY requested_at DESC LIMIT %s",
+                (failures,),
+            )
+            counts["failures"] = [dict(row) for row in cursor.fetchall()]
+        return counts
+
     # -- lazy refresh ------------------------------------------------------
     def queue_refresh(self, entry_id: str, *, at: datetime) -> None:
         """Record that somebody read this entry and it looked stale.
@@ -553,55 +601,6 @@ class PostgresEntryStore:
                     "UPDATE refresh_queue SET last_error = %s WHERE entry_id = %s",
                     (error[:500], entry_id),
                 )
-
-    # -- run history -------------------------------------------------------
-    def record_run(
-        self,
-        *,
-        source_id: str,
-        mechanism: str,
-        started_at: datetime,
-        finished_at: datetime,
-        counts: dict[str, int] | None = None,
-        error: str | None = None,
-    ) -> None:
-        """One row per run, so "is this still working?" is answerable without
-        reading logs that have already rotated away (FR-SCH-04)."""
-        counts = counts or {}
-        with self._connection.transaction(), self._connection.cursor() as cursor:
-            cursor.execute(
-                """
-                INSERT INTO sync_run (source_id, mechanism, started_at, finished_at,
-                                      created, updated, unchanged, revived, missing,
-                                      summarized, error)
-                VALUES (%(source_id)s, %(mechanism)s, %(started_at)s, %(finished_at)s,
-                        %(created)s, %(updated)s, %(unchanged)s, %(revived)s, %(missing)s,
-                        %(summarized)s, %(error)s)
-                """,
-                {
-                    "source_id": source_id,
-                    "mechanism": mechanism,
-                    "started_at": started_at,
-                    "finished_at": finished_at,
-                    "created": counts.get("created", 0),
-                    "updated": counts.get("updated", 0),
-                    "unchanged": counts.get("unchanged", 0),
-                    "revived": counts.get("revived", 0),
-                    "missing": counts.get("missing", 0),
-                    "summarized": counts.get("summarized", 0),
-                    "error": error[:2000] if error else None,
-                },
-            )
-
-    def recent_runs(self, *, limit: int = 20) -> list[dict[str, object]]:
-        with self._connection.cursor() as cursor:
-            cursor.execute(
-                "SELECT source_id, mechanism, started_at, finished_at, created, updated,"
-                " unchanged, revived, missing, summarized, error"
-                " FROM sync_run ORDER BY started_at DESC LIMIT %s",
-                (limit,),
-            )
-            return [dict(row) for row in cursor.fetchall()]
 
     # -- checkpoints (used by the incremental mechanism, phase 7) -----------
     def get_checkpoint(self, source_id: str) -> str | None:

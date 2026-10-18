@@ -53,8 +53,12 @@ infrastructure.
 
 - Every secret lives in `.env` or `searxng/settings.yml`, both gitignored. Tracked files hold
   `${VAR}` references and placeholder values only.
-- `api` is the only service with a published port. MCP servers, `searxng`, `crw`, `kb-db` and
-  every other internal service MUST stay on the `backend` network with no `ports:` entry. Network
+- `api` is the only service end users reach. The one other kind of service that MAY publish a port
+  is an operator tool that has its own credential: `admin-panel`, and the opt-in `kb-webhook` and
+  `kb-admin`, which also bind loopback by default and are off unless their compose profile is
+  enabled. A new one needs the same, stated in its plan's constitution check.
+- MCP servers, `searxng`, `crw`, `kb-db` and every other internal service MUST stay on the
+  `backend` network with no `ports:` entry. Network
   reachability from `api` is their only access control.
 - `CREDS_KEY`, `CREDS_IV` and the JWT secrets are coupled to the data they encrypt. Changes to
   backup or restore MUST keep them together.
@@ -130,4 +134,4 @@ written in tracked configuration is reviewable.
 - Plans produced by `/speckit-plan` MUST include a constitution check. A violation is either
   removed from the plan or recorded with its justification.
 
-**Version**: 1.0.0 | **Ratified**: 2026-10-04 | **Last Amended**: 2026-10-04
+**Version**: 1.1.0 | **Ratified**: 2026-10-04 | **Last Amended**: 2026-10-17

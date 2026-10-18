@@ -8,8 +8,8 @@ the design telling you something is in the wrong layer.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Callable
 
 from kb.application.ports.clock import SystemClock
 from kb.application.ports.summarizer import SummaryDraft
@@ -46,8 +46,22 @@ class Container:
     #: funnel sync does rather than building a second one.
     reconcile: ReconcileDocument
     clock: SystemClock
+    #: Run history, the request queue and the scheduler's heartbeat: operational
+    #: state beside the catalog (see adapters/outbound/postgres_runs.py).
+    runs: Any = None
+    queue: Any = None
+    heartbeats: Any = None
+    #: Manual records, the `form` source's documents (FR-SRC-07).
+    forms: Any = None
+    #: Closes whatever else was opened for the above.
+    _closers: list[Callable[[], None]] = field(default_factory=list)
 
     def close(self) -> None:
+        for close in self._closers:
+            try:
+                close()
+            except Exception:  # shutting down; nothing useful left to do with it
+                pass
         self.store.close()
 
 
@@ -58,12 +72,26 @@ def build(settings: Settings | None = None) -> Container:
     `kb.container` -- which the CLI does to read `--help`, and tests do to check
     wiring -- doesn't require the driver to be installed.
     """
+    from kb.adapters.outbound.postgres_connection import ResilientConnection
+    from kb.adapters.outbound.postgres_runs import (
+        PostgresHeartbeat,
+        PostgresRunLog,
+        PostgresSyncQueue,
+    )
+    from kb.adapters.outbound.form_source import PresetSummarizer
+    from kb.adapters.outbound.postgres_forms import PostgresFormRecords
     from kb.adapters.outbound.postgres_store import PostgresEntryStore
 
     settings = settings or Settings.from_env()
     store = PostgresEntryStore.connect(settings.database_url)
+    # The heartbeat is written from its own thread while a long sync holds the
+    # main connection, so it gets a connection of its own rather than sharing
+    # one across threads mid-transaction.
+    beat_connection = ResilientConnection.to(settings.database_url)
     clock = SystemClock(settings.tzinfo)
-    reconcile = ReconcileDocument(store, build_summarizer(settings), clock)
+    # Manual records arrive with the wording their author approved; the model
+    # is asked only for what does not (adapters/outbound/form_source.py).
+    reconcile = ReconcileDocument(store, PresetSummarizer(build_summarizer(settings)), clock)
     return Container(
         settings=settings,
         store=store,
@@ -74,6 +102,11 @@ def build(settings: Settings | None = None) -> Container:
         sync=SyncSource(store, reconcile, clock),
         reconcile=reconcile,
         clock=clock,
+        runs=PostgresRunLog(store.connection),
+        queue=PostgresSyncQueue(store.connection),
+        heartbeats=PostgresHeartbeat(beat_connection),
+        forms=PostgresFormRecords(store.connection),
+        _closers=[beat_connection.close],
     )
 
 
@@ -88,4 +121,96 @@ def build_summarizer(settings: Settings):
         model=settings.summarizer_model,
         api_key=settings.summarizer_api_key,
         languages=settings.summary_languages,
+    )
+
+
+@dataclass(slots=True)
+class AdminContainer:
+    """What the admin console is wired to: reads of everything, and the few
+    tables it may write -- never the catalog (FR-ADM-04), which the database
+    role enforces whatever this object is handed."""
+
+    settings: Settings
+    store: "PostgresEntryStore"
+    runs: Any
+    queue: Any
+    heartbeats: Any
+    clock: SystemClock
+    #: Has `check()`; None when no summarizer is configured.
+    summarizer: Any = None
+    #: `EditSources`: how the console changes kb-sources.yaml.
+    sources_editor: Any = None
+    #: `ManageForms`, `DraftSummary` and the records themselves (FR-ADM-12/13).
+    forms: Any = None
+    manage_forms: Any = None
+    draft_summary: Any = None
+    #: What `kb_get` returns, without queueing a refresh: the console's role may
+    #: not write the refresh queue.
+    get_entry: Any = None
+    #: Room for what later parts of the console add.
+    extras: dict[str, Any] = field(default_factory=dict)
+
+    def close(self) -> None:
+        self.store.close()
+
+
+def build_admin(settings: Settings | None = None) -> AdminContainer:
+    """Wire the console against the database as `kb_admin`.
+
+    One connection, used from one event-loop thread (see admin/app.py), so no
+    pool and no cross-thread transactions.
+    """
+    from kb.adapters.outbound.postgres_runs import (
+        PostgresHeartbeat,
+        PostgresRunLog,
+        PostgresSyncQueue,
+    )
+    from pathlib import Path
+
+    from kb.adapters.outbound.postgres_sources import PostgresSourceHistory
+    from kb.adapters.outbound.postgres_store import PostgresEntryStore
+    from kb.adapters.outbound.source_factory import BUILDABLE_KINDS, missing_credentials
+    from kb.adapters.outbound.sources_editor import RuamelSourceEditor
+    from kb.adapters.outbound.sources_file import FileSourcesFile
+    from kb.adapters.outbound.postgres_forms import PostgresFormRecords
+    from kb.application.use_cases.draft_summary import DraftSummary
+    from kb.application.use_cases.edit_sources import EditSources
+    from kb.application.use_cases.manage_forms import ManageForms
+    from kb.application.use_cases.request_sync import RequestSync
+
+    settings = settings or Settings.from_env()
+    store = PostgresEntryStore.connect(settings.database_url)
+    heartbeats = PostgresHeartbeat(store.connection)
+    clock = SystemClock(settings.tzinfo)
+    queue = PostgresSyncQueue(store.connection)
+    forms = PostgresFormRecords(store.connection)
+    summarizer = build_summarizer(settings) if settings.summarizer_configured else None
+
+    def scheduler_credentials():
+        beat = heartbeats.last_beat()
+        return beat.credentials if beat else {}
+
+    return AdminContainer(
+        settings=settings,
+        store=store,
+        runs=PostgresRunLog(store.connection),
+        queue=queue,
+        heartbeats=heartbeats,
+        clock=clock,
+        summarizer=summarizer,
+        forms=forms,
+        manage_forms=ManageForms(forms, RequestSync(queue, clock), clock),
+        draft_summary=DraftSummary(summarizer) if summarizer is not None else None,
+        get_entry=GetEntry(
+            store, clock, stale_after=settings.stale_after, queue_refresh=False
+        ),
+        sources_editor=EditSources(
+            FileSourcesFile(Path(settings.sources_file)),
+            RuamelSourceEditor(),
+            PostgresSourceHistory(store.connection),
+            clock,
+            credentials=scheduler_credentials,
+            buildable_kinds=BUILDABLE_KINDS,
+            missing_credentials=missing_credentials,
+        ),
     )

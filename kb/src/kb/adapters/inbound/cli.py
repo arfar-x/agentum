@@ -403,6 +403,26 @@ def _sources_command(args: argparse.Namespace, container: Any) -> dict[str, Any]
         line = f"\r{args.source}: syncing #{index} -- {label[:60]}"
         print(line.ljust(100), end="", file=sys.stderr, flush=True)
 
+    from kb.application.use_cases.run_recorder import RunRecorder
+    from kb.domain.runs import Trigger
+
+    # FR-CLI-06: a run from here leaves the same record as a scheduled one --
+    # the console's "what ran, and who started it" has no blind spot for the
+    # CLI. `getattr`: a container without history simply records nothing.
+    recorder = RunRecorder(getattr(container, "runs", None), container.clock)
+    run_id = recorder.begin(
+        source_id=source.source_id,
+        mechanism="full_scrape" if mode is Mode.FULL else "incremental",
+        triggered_by=Trigger.CLI,
+        mode=mode.value,
+        dry_run=args.dry_run,
+        forced=args.force,
+    )
+    # SIGTERM kills a Python process without unwinding; turn it into an exit so
+    # the run below is closed rather than left `running`.
+    import signal
+
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     try:
         report = container.sync.execute(
             source,
@@ -414,10 +434,28 @@ def _sources_command(args: argparse.Namespace, container: Any) -> dict[str, Any]
             content=config.content_policy_for(source_config),
         )
     except Exception as exc:  # the source is unreachable, auth failed, ...
+        recorder.end(run_id, error=str(exc).strip() or type(exc).__name__)
         raise _Reportable("source_unavailable", str(exc).strip()) from exc
+    except BaseException:
+        # Ctrl-C, or SIGTERM from a container stopping: not an error to report,
+        # but the run must not stay `running` -- a run that never ends blocks
+        # every later sync of this source.
+        recorder.end(run_id, error="interrupted: the command was stopped before it finished")
+        raise
     finally:
         print(file=sys.stderr)  # end the progress line before anything else prints
 
+    recorder.end(
+        run_id,
+        counts=report.model_dump(
+            include={
+                "seen", "created", "updated", "unchanged", "revived", "missing",
+                "summarized", "content_stored", "content_purged",
+            }
+        ),
+        rejected=report.rejected,
+        checkpoint=report.checkpoint,
+    )
     if report.checkpoint and not args.dry_run:
         # Only after a successful run: a checkpoint advanced past a failure
         # would skip whatever that run never saw.

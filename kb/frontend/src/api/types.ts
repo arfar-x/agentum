@@ -1,0 +1,297 @@
+// What the console's API returns (kb/src/kb/adapters/inbound/admin). Kept by
+// hand next to the backend's views.py: a field added there is added here.
+
+export type Health = 'healthy' | 'syncing' | 'degraded' | 'error';
+export type RunStatus = 'running' | 'success' | 'warning' | 'error';
+export type Trigger = 'scheduled' | 'manual' | 'webhook' | 'cli';
+export type RequestStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
+export type SyncMode = 'incremental' | 'full';
+export type SourceKind = 'confluence' | 'jira' | 'gitlab';
+
+export interface RunSummary {
+  id: number;
+  source_id: string;
+  mechanism: string;
+  mode: string | null;
+  status: RunStatus;
+  triggered_by: Trigger;
+  dry_run: boolean;
+  forced: boolean;
+  started_at: string;
+  finished_at: string | null;
+  duration_ms: number | null;
+  seen: number;
+  created: number;
+  updated: number;
+  unchanged: number;
+  revived: number;
+  missing: number;
+  summarized: number;
+  content_stored: number;
+  content_purged: number;
+  rejected_count: number;
+  error: string | null;
+}
+
+export interface RunDetail extends RunSummary {
+  rejected: string[];
+  checkpoint: string | null;
+}
+
+export interface SchedulerView {
+  alive: boolean;
+  beat_at: string;
+  working_on: string | null;
+  summarizer: 'none' | 'unknown' | 'ok' | 'failing';
+  summarizer_error: string | null;
+}
+
+export interface Approval {
+  value: boolean;
+  from: string;
+}
+
+export interface Overview {
+  now: string;
+  health: Health;
+  problems: string[];
+  scheduler: SchedulerView | null;
+  approved: Approval;
+  config_error: string | null;
+  entries: { live: number; soft_deleted: number; searchable: number };
+  by_type: { type: string; entries: number }[];
+  overrides: number;
+  gaps: number;
+  raw_content: { documents: number; truncated: number; text_bytes: number; disk_bytes: number };
+  runs_24h: {
+    runs: number;
+    succeeded: number;
+    warned: number;
+    failed: number;
+    running: number;
+    success_rate: number | null;
+  };
+  queue: { queued: number; running: number };
+  refresh_queue: RefreshQueue;
+  sources: { configured: number; enabled: number };
+  last_run: RunSummary | null;
+}
+
+export interface RefreshQueue {
+  pending: number;
+  gave_up: number;
+  failures: { entry_id: string; attempts: number; last_error: string; requested_at: string }[];
+}
+
+export interface MechanismSettings {
+  enabled?: boolean;
+  every?: string;
+  at?: string;
+  stale_after?: string;
+}
+
+export interface SourceCard {
+  id: string;
+  kind: SourceKind | string;
+  enabled: boolean;
+  /** Effective: the defaults with this source's own settings on top. */
+  mechanisms: Record<string, MechanismSettings>;
+  /** Only what this source itself says. */
+  own_mechanisms: Record<string, MechanismSettings>;
+  store_raw_content: boolean;
+  raw_content_max_bytes: number;
+  /** The source's own cap; null when it uses the default. */
+  own_raw_content_max_bytes: number | null;
+  settings: Record<string, unknown>;
+  entries: number;
+  content: { documents: number; text_bytes: number };
+  last_run: RunSummary | null;
+  credentials: Record<string, boolean>;
+  origin: 'yaml' | 'ui' | 'builtin';
+}
+
+export interface SourcesResponse {
+  config_error: string | null;
+  editable: boolean;
+  approved?: Approval;
+  defaults?: { mechanisms: Record<string, MechanismSettings>; raw_content_max_bytes: number };
+  /** Entries whose source is no longer configured. */
+  orphans: { source_id: string; entries: number }[];
+  /** The built-in source for manual records; null when the console is not set up for them. */
+  manual?: ManualCard | null;
+  sources: SourceCard[];
+}
+
+export interface ManualCard {
+  id: 'form';
+  records: number;
+  /** Saved, but the catalog does not yet say what they say. */
+  pending: number;
+  entries: number;
+  last_run: RunSummary | null;
+}
+
+/** One edit of kb-sources.yaml; mirrors the server's SourceChange. */
+export type SourceChange =
+  | { action: 'create'; config: Record<string, unknown> }
+  | { action: 'update'; id: string; config: Record<string, unknown> }
+  | { action: 'delete'; id: string }
+  | { action: 'approved'; value: boolean };
+
+export interface ChangeWarning {
+  level: 'info' | 'warning' | 'danger';
+  text: string;
+}
+
+export interface ChangePreview {
+  action: string;
+  source_id: string | null;
+  summary: string;
+  diff: string;
+  changed: boolean;
+  warnings: ChangeWarning[];
+  etag: string;
+}
+
+export interface Revision {
+  id: number;
+  action: string;
+  source_id: string | null;
+  actor: string;
+  at: string;
+  diff: string;
+}
+
+export interface ScheduleRow {
+  kind: 'incremental' | 'full_scrape' | 'lazy_refresh';
+  source_id: string | null;
+  enabled: boolean;
+  reason: string | null;
+  cadence: string;
+  last_run: string | null;
+  due_at: string | null;
+  running: boolean;
+  last_result: RunSummary | null;
+}
+
+export interface SchedulesResponse {
+  now: string;
+  approved?: Approval;
+  config_error: string | null;
+  rows: ScheduleRow[];
+}
+
+export interface RunsResponse {
+  runs: RunSummary[];
+  next_before: number | null;
+}
+
+export interface SyncRequestView {
+  id: number;
+  kind: 'sync' | 'purge_content';
+  source_id: string;
+  mode: string | null;
+  dry_run: boolean;
+  forced: boolean;
+  status: RequestStatus;
+  requested_at: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  run_ids: number[];
+  error: string | null;
+  position: number | null;
+}
+
+export interface Gap {
+  query: string;
+  times: number;
+  last_seen: string;
+}
+
+export interface IssuesResponse {
+  config_error: string | null;
+  summarizer: { state: string; error: string | null } | null;
+  runs: RunDetail[];
+  missing_credentials: { source_id: string; kind: string; variables: Record<string, boolean> }[];
+  refresh_queue: RefreshQueue;
+  gaps: Gap[];
+}
+
+export interface ConfigResponse {
+  languages: string[];
+  summarizer_configured: boolean;
+  entry_types: string[];
+  sources_file: string;
+  config_error: string | null;
+  kinds: SourceKind[];
+  manual_records?: boolean;
+}
+
+export interface CheckResponse {
+  ready: boolean;
+  checks: Record<string, { ok: boolean; error?: string | null } & Record<string, unknown>>;
+}
+
+export type Publication = 'published' | 'pending';
+
+/** One manual record (kb/application/ports/form_records.py). */
+export interface FormRecord {
+  slug: string;
+  title: Record<string, string>;
+  body: string;
+  type: string;
+  /** What the entry says about itself, per language. */
+  summary: Record<string, string>;
+  tags: string[];
+  keywords: string[];
+  aliases: string[];
+  owner_team: string | null;
+  revision: number;
+  created_at: string | null;
+  updated_at: string | null;
+  publication: Publication;
+}
+
+/** What is sent to create or change a record; the server owns the rest. */
+export type FormInput = Pick<
+  FormRecord,
+  'slug' | 'title' | 'body' | 'type' | 'summary' | 'tags' | 'keywords' | 'aliases' | 'owner_team'
+>;
+
+export interface FormsResponse {
+  records: FormRecord[];
+  languages: string[];
+  summarizer_configured: boolean;
+  /** Text beyond this many bytes is cut when the record is kept. */
+  max_bytes: number;
+}
+
+export interface SummaryDraft {
+  title: Record<string, string>;
+  summary: Record<string, string>;
+  keywords: string[];
+  aliases: string[];
+}
+
+export interface DraftSummaryResponse {
+  draft: SummaryDraft;
+  /** False when the model returned nothing usable and the draft is a bare title. */
+  usable: boolean;
+}
+
+export interface ContentPage {
+  text: string;
+  offset: number;
+  total_chars: number;
+  next_offset: number | null;
+  truncated: boolean;
+  original_bytes: number;
+}
+
+export interface FormContent {
+  slug: string;
+  publication: Publication;
+  /** What `kb_get` would hand an agent; null until the record is published. */
+  content: ContentPage | null;
+  entry: { id: string; summary: Record<string, string>; title: Record<string, string>; hidden: boolean } | null;
+}

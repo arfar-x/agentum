@@ -79,6 +79,14 @@ on its own. Day to day it is `make kb-status`, `make kb-sources`,
 `make kb-sync SOURCE=…` -- see
 [`docs/KNOWLEDGE_BASE.md`](docs/KNOWLEDGE_BASE.md).
 
+There is also an opt-in admin console for the catalog: `make kb-admin-up`
+(compose profile `admin`, `127.0.0.1:8324`, signs in with `KB_ADMIN_TOKEN`). It
+shows sync status and reports, queues syncs, edits `config/kb-sources.yaml`
+after an explicit approval, and holds hand-written "form" records. It cannot
+write the catalog -- its `kb_admin` database role is refused -- so anything it
+changes there is a `sync_request` that `kb-scheduler` executes. See
+"The admin console" in [`docs/KNOWLEDGE_BASE.md`](docs/KNOWLEDGE_BASE.md).
+
 Agents are managed declaratively: `make agent-export` writes every
 admin-owned agent (definition, handoff/subagent links, sharing) from the database to
 `agents/*.yaml`, and `make agent-import` (preview with `DRY_RUN=1`) applies
@@ -103,6 +111,10 @@ requirement the spec marks `done` has no test claiming it (or a test claims
 an id the spec doesn't define). Add the requirement to the spec first, then
 the test's `# Covers: FR-...` line.
 
+`make kb-e2e` runs the admin console, the scheduler and the MCP server as real
+processes against a throwaway database and a browser (needs Postgres and
+Chromium; see [`kb/e2e/README.md`](kb/e2e/README.md)). It is not part of CI.
+
 The other command runs `agent-skills`' own `mcp-server` test suite inside
 the built image, as a way to verify that submodule pin is sound in this
 stack's actual runtime:
@@ -123,6 +135,12 @@ substitute.
   conversation file RAG), `mcp-agent-skills` (Jira, Confluence, and other
   tools, over MCP), and `searxng` + `crw` (native web search: search, then
   page scraping).
+- `kb-admin` is the one `kb` service a browser reaches: opt-in, published on
+  loopback only, no `env_file` and no source credentials (an explicit
+  `environment:` allowlist), and connected as `kb_admin`, which reads
+  everything and writes only the console's own tables. Don't give it a source
+  credential, widen its grants, or make it write catalog tables itself --
+  `kb-scheduler` stays the only catalog writer.
 - `mcp-agent-skills`, `mcp-kb` and `searxng` are **internal-only, no
   published port** -- reachability from `api` is their only access control
   (MCP's HTTP transport has no auth of its own). Never add a `ports:` entry
