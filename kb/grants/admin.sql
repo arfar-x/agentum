@@ -7,7 +7,7 @@
 --
 -- Idempotent, and applied after the migrations rather than inside one: the
 -- console is opt-in, so its role may be created long after the tables exist.
--- scripts/kb-init.sh runs this when KB_ADMIN_DB_PASSWORD is set.
+-- kb/scripts/init.sh runs this when KB_ADMIN_DB_PASSWORD is set.
 GRANT USAGE ON SCHEMA public TO kb_admin;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO kb_admin;
 

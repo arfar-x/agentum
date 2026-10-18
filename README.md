@@ -28,8 +28,8 @@ sitting in front of every write. See
 | `mcp-agent-skills` | this repo's `agent-skills` submodule, built and served as an MCP server -- **internal only, no published port** |
 | `admin-panel` | [ClickHouse/librechat-admin-panel](https://github.com/ClickHouse/librechat-admin-panel) -- users/groups/roles/grants UI, see "Managing users" below |
 | `mcp-kb` | the knowledge catalog's MCP server (`kb_search`, `kb_get`) -- **internal only, no published port** |
-| `kb-admin` | the knowledge catalog's admin console (sync status and reports, triggering syncs, editing sources, manual records) -- **opt-in** (`make kb-admin-up`), published on `127.0.0.1:8324` only, signs in with `KB_ADMIN_TOKEN`; see [`docs/KNOWLEDGE_BASE.md`](docs/KNOWLEDGE_BASE.md#the-admin-console) |
-| `kb-db` | the knowledge catalog's own Postgres (`kb/`, see [`docs/spec/knowledge-base.md`](docs/spec/knowledge-base.md)) -- **internal only, no published port** |
+| `kb-admin` | the knowledge catalog's admin console (sync status and reports, triggering syncs, editing sources, manual records) -- **opt-in** (`make kb-admin-up`), published on `127.0.0.1:8324` only, signs in with `KB_ADMIN_TOKEN`; see [`kb/docs/OPERATOR_GUIDE.md`](kb/docs/OPERATOR_GUIDE.md#the-admin-console) |
+| `kb-db` | the knowledge catalog's own Postgres (`kb/`, see [`kb/docs/SPEC.md`](kb/docs/SPEC.md)) -- **internal only, no published port** |
 | `searxng` | self-hosted search backing LibreChat's native Web Search tool -- **internal only, no published port** |
 | `crw` | [fastcrw/crw](https://github.com/fastcrw/crw), a Firecrawl-compatible page scraper: fetches the pages web search found and returns them as markdown -- **internal only, no published port** |
 
@@ -145,7 +145,11 @@ import does and doesn't touch, and how to restore onto another deployment.
 agentflow/
 ├── docker-compose.yml       # the whole stack
 ├── config/librechat.yaml.example  # model + MCP + tool-approval config template -- rendered to config/librechat.yaml (gitignored) by `make up`
-├── kb/                      # the knowledge catalog module (its own tests: make kb-test)
+<<<<<<< HEAD
+├── kb/                      # the knowledge catalog module: code, compose services, .env, config, scripts, docs, spec (tests: make kb-test)
+=======
+├── kb/                      # the knowledge catalog module: code, compose services, .env, config, scripts, docs, spec (tests: make kb-test)
+>>>>>>> 6bb72b5 (refactor(kb): keep the module's env file at kb/.env)
 ├── agent-skills/            # git submodule -> arfar-x/agent-skills, pinned to a tag
 ├── agents/                  # one YAML per agent (`make agent-export`, or write your own from base-agent-template.yaml.example)
 ├── mongo-init/              # declarative Mongo app-user creation (official mongo image convention)
@@ -154,7 +158,6 @@ agentflow/
     ├── WALKTHROUGH.md       # first run, step by step, with the expected output of each command
     ├── PRODUCT_FLOW.md      # idea -> product spec -> Jira: stages, labels, what developers receive
     ├── AGENT_SYNC.md        # agent export/import: file format and semantics
-    ├── KNOWLEDGE_BASE.md    # the kb catalog: sources, freshness, overrides, troubleshooting
     ├── CONFIGURATION.md     # every .env variable, what breaks if it's wrong
     ├── KEYCLOAK.md          # SSO setup and how to switch to/from it
     ├── OPERATIONS.md        # backups, upgrades, submodule bumps, restart order

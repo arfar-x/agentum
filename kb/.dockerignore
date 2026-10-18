@@ -1,8 +1,13 @@
-# The image installs its own dependencies and builds the web app itself.
+# The build context is this directory; none of this belongs in an image. The
+# image installs its own dependencies and builds the web app itself.
+.env*
+!.env.example
+.venv
+.pytest_cache
+**/__pycache__
+**/*.egg-info
 **/node_modules
 **/dist
-frontend/dist
-.venv
-**/__pycache__
-.pytest_cache
+config/sources.yaml
+tests
 e2e

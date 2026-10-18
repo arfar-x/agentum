@@ -1,4 +1,4 @@
-"""Loading `kb-sources.yaml`: which spaces, repositories, projects and endpoints
+"""Loading `sources.yaml`: which spaces, repositories, projects and endpoints
 the catalog reads.
 
 Two things here are deliberate and worth keeping:
@@ -11,7 +11,7 @@ turns into a source pointed at nowhere. Values are then coerced by the model, so
 
 **Credentials are referenced by variable name, never written here** (`token_env:
 GITLAB_TOKEN`). The file is meant to be readable and reviewable; the secret
-stays in `.env`.
+stays in `kb/.env`.
 
 Sync runs only against **approved** configuration. `approved` defaults to true,
 because the real gate is per source: discovery writes every candidate
@@ -23,7 +23,6 @@ without editing every source.
 
 from __future__ import annotations
 
-import os
 import re
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -31,6 +30,7 @@ from typing import Annotated, Any, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
+from kb.config import process_environment
 from kb.domain.content import (
     DEFAULT_RAW_CONTENT_MAX_BYTES,
     MIN_RAW_CONTENT_MAX_BYTES,
@@ -46,7 +46,7 @@ class ConfigError(RuntimeError):
     guessing: the path, and where in it."""
 
     def __init__(self, message: str, *, path: Path | None = None, line: int | None = None) -> None:
-        location = f"{path}" if path else "kb-sources.yaml"
+        location = f"{path}" if path else "sources.yaml"
         if line is not None:
             location += f":{line}"
         self.path = path
@@ -111,7 +111,7 @@ def interpolate(
     failing. The scheduler never reads this way; it is the authority on whether
     the file is complete (FR-CFG-02).
     """
-    source = os.environ if env is None else env
+    source = process_environment() if env is None else env
     offset = 0  # characters consumed so far, for reporting the right line
 
     def replace(match: re.Match[str]) -> str:
@@ -343,7 +343,7 @@ class Defaults(BaseModel):
 
 SourcesConfig.model_rebuild()
 
-DEFAULT_PATH = Path("/opt/kb/config/kb-sources.yaml")
+DEFAULT_PATH = Path("/opt/kb/config/sources.yaml")
 
 #: Stops every source syncing without editing the file -- the switch you reach
 #: for at 2am, not the one you reach for when adding a space.
@@ -377,9 +377,9 @@ def load(
     lenient: bool = False,
 ) -> SourcesConfig:
     """Read, interpolate, parse and validate the source configuration."""
-    location = path or Path(os.environ.get("KB_SOURCES_FILE", DEFAULT_PATH))
+    location = path or Path(process_environment().get("KB_SOURCES_FILE", DEFAULT_PATH))
     if not location.exists():
-        raise ConfigError("file not found -- copy config/kb-sources.yaml.example to it", path=location)
+        raise ConfigError("file not found -- copy kb/config/sources.yaml.example to it", path=location)
     try:
         text = location.read_text(encoding="utf-8")
     except UnicodeDecodeError as exc:
@@ -397,7 +397,7 @@ def parse(
     """The same reading as `load`, from text -- so a proposed edit can be
     checked with exactly the rules the scheduler will apply to it."""
     location = path or Path("kb-sources.yaml")
-    environment = os.environ if env is None else env
+    environment = process_environment() if env is None else env
     raw = interpolate(text, env, path=location, lenient=lenient)
     try:
         document: Any = yaml.safe_load(raw) or {}
