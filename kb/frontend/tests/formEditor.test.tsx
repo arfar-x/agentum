@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import type { FormRecord } from '../src/api/types';
@@ -22,6 +22,7 @@ const saved: FormRecord = {
   created_at: null,
   updated_at: null,
   publication: 'pending',
+  published_summary: null,
 };
 
 function open(props: Partial<React.ComponentProps<typeof FormEditorModal>> = {}) {
@@ -101,12 +102,12 @@ describe('FormEditorModal', () => {
     open({ record: saved });
     await userEvent.click(screen.getByRole('button', { name: /generate summary/i }));
 
-    expect(await screen.findByLabelText(/^Summary/)).toHaveValue('How releases ship.');
+    expect(await screen.findByLabelText('Summary (en)')).toHaveValue('How releases ship.');
     expect(screen.getByRole('status')).toHaveTextContent(/nothing is saved/i);
     expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual(['POST /api/forms/draft-summary']);
 
     await userEvent.click(screen.getByRole('button', { name: /undo/i }));
-    expect(screen.getByLabelText(/^Summary/)).toHaveValue('');
+    expect(screen.getByLabelText('Summary (en)')).toHaveValue('');
   });
 
   it('a draft the model could not make is reported, not applied', async () => {
@@ -114,13 +115,37 @@ describe('FormEditorModal', () => {
     open({ record: saved });
     await userEvent.click(screen.getByRole('button', { name: /generate summary/i }));
     expect(await screen.findByRole('status')).toHaveTextContent(/nothing usable/i);
-    expect(screen.getByLabelText(/^Summary/)).toHaveValue('');
+    expect(screen.getByLabelText('Summary (en)')).toHaveValue('');
   });
 
   it('without a summarizer the button is disabled and says why', () => {
     open({ record: saved, summarizerConfigured: false });
     expect(screen.getByRole('button', { name: /generate summary/i })).toBeDisabled();
     expect(screen.getByText(/written by hand/i)).toBeInTheDocument();
+  });
+
+  it('puts the summary under the control that drafts it, in every language', () => {
+    open();
+    const card = screen.getByText('Summary', { selector: 'p' }).closest('div.rounded-xl') as HTMLElement;
+    expect(within(card).getByRole('button', { name: /generate summary/i })).toBeInTheDocument();
+    expect(within(card).getByLabelText('Summary (en)')).toBeInTheDocument();
+    expect(within(card).getByLabelText('Summary (fa)')).toHaveAttribute('dir', 'rtl');
+  });
+
+  it('shows the summary the catalog serves beside the one being edited, once the record is published', async () => {
+    const published = { ...saved, summary: { en: 'New wording.' }, publication: 'pending' as const, published_summary: { en: 'Old wording.', fa: 'قدیمی' } };
+    open({ record: published });
+    expect(screen.getByLabelText('Summary (en)')).toHaveValue('New wording.');
+    expect(screen.getByText(/In the catalog now \(en\)/)).toBeInTheDocument();
+    expect(screen.getByText('Old wording.')).toBeInTheDocument();
+    await userEvent.clear(screen.getByLabelText('Summary (en)'));
+    await userEvent.type(screen.getByLabelText('Summary (en)'), 'Old wording.');
+    expect(screen.getByText(/the same as above/i)).toBeInTheDocument();
+  });
+
+  it('shows nothing as served for a record that is not published yet', () => {
+    open({ record: saved });
+    expect(screen.queryByText(/In the catalog now/)).not.toBeInTheDocument();
   });
 
   it('a Persian tab is laid out right to left', async () => {

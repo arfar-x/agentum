@@ -27,6 +27,7 @@ const record: FormRecord = {
   created_at: null,
   updated_at: null,
   publication: 'pending',
+  published_summary: null,
 };
 
 describe('slugify', () => {

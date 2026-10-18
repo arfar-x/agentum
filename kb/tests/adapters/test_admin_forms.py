@@ -46,6 +46,23 @@ def test_a_record_is_created_listed_and_waits_for_the_scheduler_to_publish_it(cl
     assert client.get("/api/forms/release-process").json()["record"]["publication"] == "published"
 
 
+def test_a_record_carries_the_summary_the_catalog_serves_once_it_is_published(client, world):
+    # Covers: FR-ADM-21
+    client.post("/api/forms", json=RECORD, headers=CSRF)
+    assert client.get("/api/forms/release-process").json()["record"]["published_summary"] is None
+
+    publish(world)
+    published = client.get("/api/forms/release-process").json()["record"]["published_summary"]
+    assert published == {"en": "How releases ship."}
+
+    # An edit that has not been published yet leaves agents with the old text,
+    # and that is the text the editor shows beside what is about to be saved.
+    client.put("/api/forms/release-process", json={**RECORD, "summary": {"en": "New wording."}}, headers=CSRF)
+    listed = client.get("/api/forms").json()["records"][0]
+    assert listed["summary"] == {"en": "New wording."}
+    assert listed["published_summary"] == {"en": "How releases ship."}
+
+
 def test_an_edit_makes_the_record_pending_again_until_it_is_published(client, world):
     # Covers: FR-ADM-12
     client.post("/api/forms", json=RECORD, headers=CSRF)

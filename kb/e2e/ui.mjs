@@ -140,7 +140,7 @@ const phases = {
     await page.waitForSelector('text=Drafted by the model');
     await page.click('[role=tab]:has-text("fa")');
     expect((await page.getAttribute('#form-title', 'dir')) === 'rtl', 'Persian is laid out right to left');
-    expect((await page.inputValue('#form-summary')).includes('انتشار'), 'the draft carries a Persian summary');
+    expect((await page.inputValue('#form-summary-fa')).includes('انتشار'), 'the draft carries a Persian summary');
     await shot('07-form-editor');
     await page.click('button:has-text("Save and publish")');
     await page.waitForSelector('tr:has-text("release-process"):has-text("published")', { timeout: 60000 });
@@ -155,7 +155,7 @@ const phases = {
     await signIn();
     await go('Form records');
     await page.click('[aria-label="Edit release-process"]');
-    await page.fill('#form-summary', 'Edited by hand: we ship on Tuesdays.');
+    await page.fill('#form-summary-en', 'Edited by hand: we ship on Tuesdays.');
     await page.click('button:has-text("Save changes")');
     await page.waitForSelector('tr:has-text("release-process"):has-text("rev 2"):has-text("published")', { timeout: 60000 });
     expect(true, 'a summary-only edit is published as revision 2');

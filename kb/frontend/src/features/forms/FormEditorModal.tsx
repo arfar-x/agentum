@@ -160,22 +160,6 @@ export function FormEditorModal({ record, languages, entryTypes, summarizerConfi
             value={form.title[lang] ?? ''}
             onChange={(e) => setTitle(lang, e.target.value)}
           />
-          <label className={`${label} mt-3`} htmlFor="form-summary">
-            Summary ({lang})
-          </label>
-          <textarea
-            id="form-summary"
-            rows={3}
-            className={input}
-            dir={rtl ? 'rtl' : 'ltr'}
-            lang={lang}
-            value={form.summary[lang] ?? ''}
-            onChange={(e) => set({ summary: { ...form.summary, [lang]: e.target.value } })}
-            placeholder="What this is, in a sentence or two — it is what search matches against."
-          />
-          <p className="mt-1 text-[11px] text-slate-500">
-            A search in any language reaches a record written in another through the summaries, so write one for each language people use.
-          </p>
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -273,9 +257,10 @@ export function FormEditorModal({ record, languages, entryTypes, summarizerConfi
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <p className="text-xs font-semibold text-slate-200">Generate a summary</p>
+              <p className="text-xs font-semibold text-slate-200">Summary</p>
               <p className="text-[11px] text-slate-500">
-                Asks the model to describe the text above. It only drafts: the result fills the fields, you edit it, and nothing is kept until you save.
+                What search matches against and what an agent is told. Write it below, or have the model draft it from the text above: a draft only
+                fills the fields, you edit it, and nothing is kept until you save.
               </p>
             </div>
             <button
@@ -301,6 +286,45 @@ export function FormEditorModal({ record, languages, entryTypes, summarizerConfi
               ) : null}
             </p>
           ) : null}
+
+          <div className="mt-4 space-y-4">
+            {tabs.map((l) => {
+              const served = record?.published_summary?.[l] ?? '';
+              const here = form.summary[l] ?? '';
+              return (
+                <div key={l}>
+                  <label className={label} htmlFor={`form-summary-${l}`}>
+                    Summary ({l})
+                  </label>
+                  <textarea
+                    id={`form-summary-${l}`}
+                    rows={3}
+                    className={input}
+                    dir={isRtl(l) ? 'rtl' : 'ltr'}
+                    lang={l}
+                    value={here}
+                    onChange={(e) => set({ summary: { ...form.summary, [l]: e.target.value } })}
+                    placeholder="What this is, in a sentence or two — it is what search matches against."
+                  />
+                  {record?.published_summary && served ? (
+                    <p className="mt-1.5 rounded-lg border border-slate-800 bg-slate-900/60 p-2.5 text-[11px] text-slate-400">
+                      <span className="font-semibold text-slate-300">In the catalog now ({l}): </span>
+                      {served === here ? (
+                        <span className="italic">the same as above.</span>
+                      ) : (
+                        <span dir={isRtl(l) ? 'rtl' : 'ltr'} lang={l}>
+                          {served}
+                        </span>
+                      )}
+                    </p>
+                  ) : null}
+                </div>
+              );
+            })}
+            <p className="text-[11px] text-slate-500">
+              A search in any language reaches a record written in another through the summaries, so write one for each language people use.
+            </p>
+          </div>
         </div>
 
         {found.length && (form.body || form.slug || Object.values(form.title).some(Boolean)) ? (

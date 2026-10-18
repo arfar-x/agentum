@@ -4,8 +4,8 @@
 |---|---|
 | **Spec ID** | SPEC-KB-001 |
 | **Status** | Active — implemented (see §12; two source kinds deferred by choice) |
-| **Version** | 2.9.0 |
-| **Last updated** | 2026-10-14 |
+| **Version** | 2.10.0 |
+| **Last updated** | 2026-10-18 |
 | **Implements** | `kb/` module, `mcp-kb` service |
 | **Related** | [`AGENTS.md`](../../AGENTS.md), [`CONFIGURATION.md`](CONFIGURATION.md), [`OPERATOR_GUIDE.md`](OPERATOR_GUIDE.md), [`kb/README.md`](../README.md) |
 
@@ -309,6 +309,7 @@ catalog -- the console asks it to, through a queue (FR-SCH-11). Designed in
 | FR-ADM-18 | A request body MUST be bounded: 1 MiB for every endpoint except saving a record, and for that the size the catalog keeps plus room for the JSON around it; a larger one MUST be refused (413) without being read in full. A record's text MUST NOT exceed the size the catalog keeps (§6.10), so what an operator saves is what agents read. | done |
 | FR-ADM-19 | Saving a record that was saved by someone else since the editor opened it MUST be refused, saying so, rather than overwrite it. | done |
 | FR-ADM-20 | The console MUST show what the scheduler sees where only the scheduler can see it: whether syncing is switched off by its environment, and a configuration error that stops it. Nothing the console reads from its own environment may reach a response through a `${VAR}` in the file. | done |
+| FR-ADM-21 | The record editor MUST show an operator a record's summary, in every configured language, together with the control that drafts one on demand -- the summary to write or correct by hand sits directly under that control, not elsewhere in the form -- and, for a record that is published, MUST show the summary the catalog currently serves (and none for a record not yet published) so what agents are told can be compared with what is about to be saved. | done |
 
 ## 7. Non-functional requirements
 
@@ -515,6 +516,7 @@ which a flat catalog cannot answer.
 |---|---|---|
 | 2.8.0 | 2026-10-13 | Added §7.4 (NFR-CFG-01..05). The module is now self-contained: its services (`kb/compose.yaml`, included by the root file), variables (`kb/.env.example` -> `kb/.env`), source configuration (`kb/config/sources.yaml`), scripts, make targets, operator guide and this spec all live under `kb/`. The sync services no longer receive the stack's whole `.env`, and the query path still receives no env file. `kb/config.py` is the only module that reads the process environment: `kb/config.py` is the only module that reads the process environment. The webhook receiver, the migrations directory and the source-config loader had each read variables directly, so "which variables does this process need" had no single answer. |
 | 1.0.0 | 2026-09-24 | First specification. Phases 1–3 implemented against it. |
+| 2.10.0 | 2026-10-18 | Added FR-ADM-21: the record editor puts the summary under the control that drafts it, and shows the summary the catalog currently serves beside it. Before this the summary field sat at the top of the form and nothing near the draft control showed a value. |
 | 2.9.0 | 2026-10-17 | Production hardening of the admin console and its neighbours: NFR-DEP-09 (a lost database connection is replaced, not fatal -- before this, a database restart left the scheduler, console and MCP server failing until restarted by hand) FR-ADM-17 (health reflects the database) and FR-ADM-18 (bounded request bodies; a record's text fits what is kept) FR-CFG-13 (a configuration write is verified, and undone if it fails), FR-CFG-14 and FR-CFG-15 (the console cannot point a source at another component's secrets; source ids are case-insensitively unique), and FR-ADM-19 and FR-ADM-20 (stale record saves are refused; the console reports the scheduler's view of its own environment). The scheduler now publishes manual records that were saved or deleted without its being asked. |
 | 2.8.0 | 2026-10-14 | Added §6.11 (FR-ADM-01..16), FR-SCH-08..13, FR-CFG-10..12, FR-CLI-06, FR-SRC-07 and NFR-DEP-08: an admin console for the operator, in its own opt-in service. It reads run history and the catalog, queues syncs for the scheduler to run, edits the source configuration after an explicit approval, and holds manual `form` records with on-demand summaries. FR-ENT-02 now admits the catalog's own `form` kind; N2 and §11 say what that does and does not change. Run history gained a start-of-run record, a status and the trigger, because "is it running now, and who asked" was not answerable from the end-of-run row alone. |
 | 2.7.0 | 2026-10-11 | Added FR-REC-13: a label-only change re-classifies the entry without re-summarizing. Adding or swapping a wiki label changes neither the page's text nor its version, so the content-hash gate treated it as unchanged and the entry kept its old type and tags until the text next changed. |

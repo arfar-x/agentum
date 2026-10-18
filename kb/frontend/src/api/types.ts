@@ -250,6 +250,8 @@ export interface FormRecord {
   created_at: string | null;
   updated_at: string | null;
   publication: Publication;
+  /** The summary the catalog serves for this record now; null until it is published. */
+  published_summary: Record<string, string> | null;
 }
 
 /** What is sent to create or change a record; the server owns the rest. */

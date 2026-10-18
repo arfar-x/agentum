@@ -637,9 +637,13 @@ def build_app(
         return services.manage_forms
 
     def record_view(record: Any) -> dict[str, Any]:
+        entry = services.store.get(entry_id_for(FORM_SOURCE_ID, record.slug))
+        served = entry is not None and entry.deleted_at is None
         return {
             **record.model_dump(mode="json"),
             "publication": publication_state(record, services.store),
+            # What agents are told right now, which an unpublished edit has not changed.
+            "published_summary": dict(entry.summary) if served else None,
         }
 
     async def forms_list(_: Request) -> Response:
