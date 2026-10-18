@@ -402,9 +402,10 @@ services:
       REDIS_URL: redis://gateway-redis:6379/0
       GATEWAY_PORT: "8080"
     ports:
-      # Reached by clients on other machines. Terminate TLS in front of it, or bind
-      # 127.0.0.1 here and put a reverse proxy on the host.
-      - "${GATEWAY_PUBLISHED_PORT:-8080}:8080"
+      # Bind address + port both come from .env (GATEWAY_BIND_ADDR / GATEWAY_PUBLISHED_PORT).
+      # Loopback by default so it is not reachable from the network; put a reverse proxy /
+      # TLS terminator in front if clients on other machines need it.
+      - "${GATEWAY_BIND_ADDR:-127.0.0.1}:${GATEWAY_PUBLISHED_PORT:-8090}:8080"
     volumes:
       - ./agent-gateway/config:/etc/agent-gateway:ro
     networks: [gateway-tools, gateway-kb, gateway-data]
