@@ -266,6 +266,9 @@ it.
   `agent-import`: agent file format, sharing, import semantics.
 - `agents/` -- one YAML per agent, from `make agent-export` or hand-written;
   start from `agents/base-agent-template.yaml.example`.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) -- how the stack fits together:
+  the diagram (`docs/architecture.svg`), the five plug-in contracts, how `kb`
+  retrieves and what it depends on, what `agent-gateway` does, trust boundaries.
 - [`docs/PRODUCT_FLOW.md`](docs/PRODUCT_FLOW.md) -- the product flow the
   agents run: idea -> product spec (Spec Kit `spec.md` shape, in Confluence,
   `spec-draft`/`spec-approved` labels) -> Jira, with an engineering page under
