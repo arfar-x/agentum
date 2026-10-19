@@ -44,6 +44,9 @@ networks:
   gateway-tools:
   gateway-kb:
   gateway-data:
+  # The one link between LibreChat and the gateway: only `api` and `agent-gateway` join it, so the
+  # gateway is reachable from `api` as a chat connection without ever sharing `backend`.
+  gateway-api:
 
 volumes:
   mongodb_data:
@@ -124,7 +127,7 @@ services:
       - librechat_uploads:/app/uploads
       - librechat_images:/app/client/public/images
       - librechat_logs:/app/api/logs
-    networks: [frontend, backend, scraper, agent-tools]
+    networks: [frontend, backend, scraper, agent-tools, gateway-api]
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
@@ -408,7 +411,7 @@ services:
       - "${GATEWAY_BIND_ADDR:-127.0.0.1}:${GATEWAY_PUBLISHED_PORT:-8090}:8080"
     volumes:
       - ./agent-gateway/config:/etc/agent-gateway:ro
-    networks: [gateway-tools, gateway-kb, gateway-data]
+    networks: [gateway-tools, gateway-kb, gateway-data, gateway-api]
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }

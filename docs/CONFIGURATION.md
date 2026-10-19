@@ -115,6 +115,18 @@ An unsupported level answers with the supported list in the error. Rerun this
 when the gateway or its models change. The effort list is per endpoint, not per
 model, so a model that accepts a different set needs its own endpoint entry.
 
+## Agent Gateway connection
+
+`config/librechat.yaml.example` also lists an **Agent Gateway** endpoint next to
+the model endpoint above. Each model it offers is one of the gateway's agents
+(`agent-gateway/config/agents/`). Start it with `make gateway-up`; LibreChat
+reaches it at `http://agent-gateway:8080/v1` over the `gateway-api` network,
+which only `api` and the gateway share. The endpoint uses `user_provided` keys:
+each user creates a key with `make gateway-key-create USER=<email>` and pastes
+it into LibreChat when first picking the endpoint. With the gateway stopped the
+model list falls back to the agents named in the template and chats fail until
+it is started.
+
 ## MCP: agent-skills
 
 | Variable | Required | Notes |

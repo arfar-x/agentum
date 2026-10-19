@@ -141,6 +141,21 @@ endpoints:
           prompt: 0
           completion: 0
 
+    # The agent gateway (profile `gateway`, `make gateway-up`): each model it lists is one of
+    # its agents, run by the gateway with its own tools. Every user pastes their own gateway
+    # key (`make gateway-key-create USER=...`) in LibreChat's key dialog, so the gateway sees
+    # who is calling. Reached over the `gateway-api` network, which only `api` and the
+    # gateway share. With the gateway stopped the model list falls back to `default` and a
+    # chat fails until it is started again.
+    - name: 'Agent Gateway'
+      apiKey: 'user_provided'
+      baseURL: 'http://agent-gateway:8080/v1'
+      models:
+        default: ['doc-gen', 'docs-manager', 'engineering-review', 'plan', 'prepare-for-dev', 'product-assistant', 'tasks']
+        fetch: true
+      titleConvo: false
+      modelDisplayLabel: 'Agent Gateway'
+
   agents:
     recursionLimit: REPLACE_ME_AGENTS_RECURSION_LIMIT
     maxRecursionLimit: REPLACE_ME_AGENTS_MAX_RECURSION_LIMIT
