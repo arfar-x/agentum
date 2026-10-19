@@ -1,0 +1,352 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1840 1760" width="1840" height="1760" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif">
+<defs><filter id="sh" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="2" stdDeviation="2.4" flood-color="#0f172a" flood-opacity="0.10"/></filter><marker id="ar" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#475569"/></marker><linearGradient id="hd" x1="0" x2="1"><stop offset="0" stop-color="#312e81"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs>
+<rect width="1840" height="1760" fill="#ffffff"/>
+<rect x="0" y="0" width="1840" height="78" fill="url(#hd)"/>
+<text x="32" y="36" font-size="26" font-weight="800" fill="#fff" text-anchor="start">agentflow -- architecture</text>
+<text x="32" y="60" font-size="13.5" font-weight="400" fill="#e0e7ff" text-anchor="start">A self-hosted agentic stack built from sockets: every client, agent, tool server, knowledge source and model is a plug. Dashed outlines are the sockets.</text>
+<rect x="1200" y="14" width="610" height="50" rx="10" fill="#ffffff" fill-opacity="0.12"/>
+<rect x="1214" y="24" width="26" height="14" rx="4" fill="#fff" stroke="#fff"/>
+<text x="1248" y="36" font-size="12" font-weight="400" fill="#fff" text-anchor="start">shipped component</text>
+<rect x="1390" y="24" width="26" height="14" rx="4" fill="none" stroke="#fff" stroke-dasharray="4 3"/>
+<text x="1424" y="36" font-size="12" font-weight="400" fill="#fff" text-anchor="start">socket: plug in, no code change</text>
+<path d="M1214 52h28" stroke="#fff" stroke-width="2" marker-end="url(#ar)"/>
+<text x="1250" y="56" font-size="12" font-weight="400" fill="#fff" text-anchor="start">request / call</text>
+<path d="M1390 52h28" stroke="#fff" stroke-width="2" stroke-dasharray="5 4"/>
+<text x="1424" y="56" font-size="12" font-weight="400" fill="#fff" text-anchor="start">background / optional path</text>
+<rect x="24" y="96" width="1792" height="118" rx="18" fill="none" stroke="#cbd5e1" stroke-width="1.4" stroke-dasharray="3 6"/>
+<text x="40" y="117" font-size="11.5" font-weight="700" fill="#64748b" text-anchor="start">1  CLIENTS</text>
+<text x="1800" y="117" font-size="11.5" font-weight="400" fill="#94a3b8" text-anchor="end">anything that speaks OpenAI, or a browser -- no client code in this repo</text>
+<rect x="46" y="124" width="330" height="78" rx="12" fill="#f1f5f9" stroke="#64748b" stroke-width="1.6" filter="url(#sh)"/>
+<text x="60" y="148" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">End users (browser)</text>
+<text x="62" y="168" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Chat, agents, files, web search</text>
+<text x="62" y="185.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Sign in with local auth or Keycloak SSO</text>
+<rect x="396" y="124" width="400" height="78" rx="12" fill="#f1f5f9" stroke="#64748b" stroke-width="1.6" filter="url(#sh)"/>
+<text x="410" y="148" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">Coding agents and SDKs</text>
+<text x="412" y="168" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">opencode, Cursor, OpenAI SDK, curl</text>
+<text x="412" y="185.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">base URL + gateway key, pick an agent as the model</text>
+<rect x="816" y="124" width="330" height="78" rx="12" fill="#f1f5f9" stroke="#64748b" stroke-width="1.6" filter="url(#sh)"/>
+<text x="830" y="148" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">Operators</text>
+<text x="832" y="168" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">make targets, kb CLI, make agent-import</text>
+<text x="832" y="185.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">KB admin console (loopback :8324)</text>
+<rect x="1166" y="124" width="330" height="78" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="7 5"/>
+<text x="1180" y="148" font-size="13.5" font-weight="700" fill="#475569" text-anchor="start">Any OpenAI-compatible client</text>
+<text x="1182" y="168" font-size="12" font-weight="400" fill="#334155" text-anchor="start">Nothing to install: it needs</text>
+<text x="1182" y="185.5" font-size="12" font-weight="400" fill="#334155" text-anchor="start">a base URL and a key</text>
+<g transform="translate(1462,134)" stroke="#64748b" stroke-width="1.8" fill="none" stroke-linecap="round"><path d="M6 0v7M16 0v7"/><rect x="2" y="7" width="18" height="9" rx="3" fill="#e2e8f0"/><path d="M11 16v5"/></g>
+<rect x="1516" y="124" width="280" height="78" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="7 5"/>
+<text x="1530" y="148" font-size="13.5" font-weight="700" fill="#475569" text-anchor="start">Keycloak / OIDC (optional)</text>
+<text x="1532" y="168" font-size="12" font-weight="400" fill="#334155" text-anchor="start">docs/KEYCLOAK.md</text>
+<g transform="translate(1762,134)" stroke="#64748b" stroke-width="1.8" fill="none" stroke-linecap="round"><path d="M6 0v7M16 0v7"/><rect x="2" y="7" width="18" height="9" rx="3" fill="#e2e8f0"/><path d="M11 16v5"/></g>
+<rect x="24" y="232" width="1792" height="262" rx="18" fill="none" stroke="#cbd5e1" stroke-width="1.4" stroke-dasharray="3 6"/>
+<text x="40" y="253" font-size="11.5" font-weight="700" fill="#64748b" text-anchor="start">2  FRONT DOORS</text>
+<text x="1800" y="253" font-size="11.5" font-weight="400" fill="#94a3b8" text-anchor="end">two ways in, same agents and tools behind them -- the only services clients reach</text>
+<rect x="46" y="260" width="760" height="222" rx="12" fill="#eef2ff" stroke="#4f46e5" stroke-width="1.6" filter="url(#sh)"/>
+<text x="60" y="284" font-size="15" font-weight="700" fill="#1e1b4b" text-anchor="start">LibreChat  (api :3080)</text>
+<text x="60" y="301" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">the one UI end users see</text>
+<text x="62" y="321" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Custom endpoints (config/librechat.yaml, rendered from the .example + .env):</text>
+<text x="62" y="338.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">   OpenAI Compatible  -&gt; the model endpoint, direct</text>
+<text x="62" y="356.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">   Agent Gateway      -&gt; http://agent-gateway:8080/v1, per-user key</text>
+<text x="62" y="373.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Native agents: agents/*.yaml, applied with `make agent-import`</text>
+<text x="62" y="391.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Native tools: MCP (kb, agent-skills), web search (searxng + crw), RAG on uploads</text>
+<text x="62" y="408.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Own stores: mongodb (users, chats, agent defs), meilisearch, rag_api + vectordb</text>
+<rect x="755.0" y="268" width="41.0" height="19" rx="9.5" fill="#4f46e5"/>
+<text x="775.5" y="281.5" font-size="11" font-weight="600" fill="#fff" text-anchor="middle">:3080</text>
+<rect x="1030" y="260" width="766" height="222" rx="12" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.6" filter="url(#sh)"/>
+<text x="1044" y="284" font-size="15" font-weight="700" fill="#2e1065" text-anchor="start">agent-gateway  (127.0.0.1:8090)</text>
+<text x="1044" y="301" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">serves agents as OpenAI models -- the model name is the agent</text>
+<text x="1046" y="321" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">GET /v1/models   POST /v1/chat/completions   POST /v1/responses   other /v1/* proxied</text>
+<text x="1046" y="338.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Every request authenticated by a key (agw_...), scoped to that user, rate-limited</text>
+<text x="1046" y="356.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Agents are files: agent-gateway/config/agents/*.yaml  (prompt, tools, handoffs, model)</text>
+<text x="1046" y="373.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Tool servers are config: agent-gateway/config/mcp-servers.yaml</text>
+<text x="1046" y="391.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Postgres: keys, stored credentials (Fernet), paused turns    Redis: locks</text>
+<text x="1046" y="408.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Hexagonal: domain -&gt; application (turn engine) -&gt; adapters</text>
+<rect x="1745.0" y="268" width="41.0" height="19" rx="9.5" fill="#7c3aed"/>
+<text x="1765.5" y="281.5" font-size="11" font-weight="600" fill="#fff" text-anchor="middle">:8090</text>
+<path d="M806 372 L1030 372" fill="none" stroke="#4f46e5" stroke-width="1.8" marker-end="url(#ar)"/>
+<rect x="789.0" y="346" width="258.0" height="17" rx="4" fill="#fff" fill-opacity="0.92"/>
+<text x="918" y="358" font-size="11" font-weight="600" fill="#4f46e5" text-anchor="middle">gateway-api network (only api + gateway)</text>
+<rect x="824" y="408" width="190" height="62" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="7 5"/>
+<text x="838" y="432" font-size="13.5" font-weight="700" fill="#475569" text-anchor="start">Another front door</text>
+<text x="840" y="452" font-size="12" font-weight="400" fill="#334155" text-anchor="start">any UI that speaks OpenAI</text>
+<g transform="translate(980,418)" stroke="#64748b" stroke-width="1.8" fill="none" stroke-linecap="round"><path d="M6 0v7M16 0v7"/><rect x="2" y="7" width="18" height="9" rx="3" fill="#e2e8f0"/><path d="M11 16v5"/></g>
+<rect x="1010" y="512" width="806" height="140" rx="18" fill="none" stroke="#cbd5e1" stroke-width="1.4" stroke-dasharray="3 6"/>
+<text x="1026" y="533" font-size="11.5" font-weight="700" fill="#64748b" text-anchor="start">3  ONE AGENT TURN IN THE GATEWAY</text>
+<text x="1800" y="533" font-size="11.5" font-weight="400" fill="#94a3b8" text-anchor="end">application/turn.py</text>
+<rect x="1030" y="540" width="186" height="86" rx="10" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.4"/>
+<circle cx="1050" cy="562" r="11" fill="#7c3aed"/>
+<text x="1050" y="566.5" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">1</text>
+<text x="1068" y="567" font-size="13.5" font-weight="700" fill="#2e1065" text-anchor="start">Auth + scope</text>
+<text x="1044" y="587" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">key -&gt; user; load thread,</text>
+<text x="1044" y="602" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">history, stored creds</text>
+<rect x="1226" y="540" width="186" height="86" rx="10" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.4"/>
+<circle cx="1246" cy="562" r="11" fill="#7c3aed"/>
+<text x="1246" y="566.5" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">2</text>
+<text x="1264" y="567" font-size="13.5" font-weight="700" fill="#2e1065" text-anchor="start">Pre-retrieval</text>
+<text x="1240" y="587" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">kb_search on the user's</text>
+<text x="1240" y="602" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">words (no model yet)</text>
+<rect x="1422" y="540" width="186" height="86" rx="10" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.4"/>
+<circle cx="1442" cy="562" r="11" fill="#7c3aed"/>
+<text x="1442" y="566.5" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">3</text>
+<text x="1460" y="567" font-size="13.5" font-weight="700" fill="#2e1065" text-anchor="start">Model step</text>
+<text x="1436" y="587" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">upstream LLM with the agent</text>
+<text x="1436" y="602" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">prompt + exposed tools</text>
+<rect x="1618" y="540" width="190" height="86" rx="10" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.4"/>
+<circle cx="1638" cy="562" r="11" fill="#7c3aed"/>
+<text x="1638" y="566.5" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">4</text>
+<text x="1656" y="567" font-size="13.5" font-weight="700" fill="#2e1065" text-anchor="start">Route the call</text>
+<text x="1632" y="587" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">gateway tool | handoff |</text>
+<text x="1632" y="602" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">client tool | ask user</text>
+<path d="M1217 583 L1225 583" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#ar)"/>
+<path d="M1413 583 L1421 583" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#ar)"/>
+<path d="M1609 583 L1617 583" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#ar)"/>
+<rect x="1010" y="664" width="806" height="98" rx="12" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.6"/>
+<text x="1024" y="688" font-size="14" font-weight="700" fill="#2e1065" text-anchor="start">Tool routing and safety</text>
+<text x="1026" y="708" font-size="12" font-weight="400" fill="#334155" text-anchor="start">Credentials per call: 1) request headers  X-Agent-Skills-Env-*   2) stored (creds set)   3) tool hidden, agent asks the user</text>
+<text x="1026" y="725.5" font-size="12" font-weight="400" fill="#334155" text-anchor="start">Writes are shown first: approval code or the client's question tool; each toolset also needs its own --confirm</text>
+<text x="1026" y="743.0" font-size="12" font-weight="400" fill="#334155" text-anchor="start">Handoff = swap to a specialist agent;  client tools held back until the user opts in;  long prompts condensed and cached</text>
+<rect x="46" y="512" width="940" height="250" rx="12" fill="#eef2ff" stroke="#4f46e5" stroke-width="1.6" filter="url(#sh)"/>
+<text x="60" y="536" font-size="15" font-weight="700" fill="#1e1b4b" text-anchor="start">LibreChat's own agent loop  (same tools, same catalog, different runtime)</text>
+<text x="62" y="556" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Agents (agents/*.yaml, 6 shipped): Product Assistant routes; Plan shapes ideas; Prepare for Dev writes the spec;</text>
+<text x="62" y="573.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Engineering Review; Doc Gen / Docs manager draft docs.  The flow: idea -&gt; product spec (Confluence) -&gt; Jira tickets  (docs/PRODUCT_FLOW.md)</text>
+<text x="62" y="591.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start"></text>
+<text x="62" y="608.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Tool approval is two-layered on purpose:</text>
+<text x="62" y="626.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">   LibreChat toolApproval `ask` list pauses on matching &lt;toolset&gt;_&lt;action&gt;_mcp_&lt;server&gt; calls</text>
+<text x="62" y="643.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">   each write-capable toolset in agent-skills ALSO refuses to run without its own --confirm</text>
+<text x="62" y="661.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start"></text>
+<text x="62" y="678.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Tool calls leave through MCP (HTTP):  kb_search / kb_get  and  jira_* confluence_* glab_*</text>
+<text x="62" y="696.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">kb_search needs the question twice: `queries` (user's words) + `catalog_queries` (catalog's language) -- enforced by the schema</text>
+<path d="M480 482 L480 512" fill="none" stroke="#4f46e5" stroke-width="1.8" marker-end="url(#ar)"/>
+<path d="M1400 482 L1400 512" fill="none" stroke="#7c3aed" stroke-width="1.8" marker-end="url(#ar)"/>
+<rect x="24" y="790" width="1792" height="252" rx="18" fill="none" stroke="#cbd5e1" stroke-width="1.4" stroke-dasharray="3 6"/>
+<text x="40" y="811" font-size="11.5" font-weight="700" fill="#64748b" text-anchor="start">4  TOOL PLANE (MCP)</text>
+<text x="1800" y="811" font-size="11.5" font-weight="400" fill="#94a3b8" text-anchor="end">MCP over HTTP, internal only, no published ports</text>
+<rect x="46" y="818" width="420" height="208" rx="12" fill="#ecfeff" stroke="#0891b2" stroke-width="1.6" filter="url(#sh)"/>
+<text x="60" y="842" font-size="15" font-weight="700" fill="#083344" text-anchor="start">mcp-agent-skills   (agent-tools net)</text>
+<text x="60" y="859" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">LibreChat's copy; honors per-request credential headers</text>
+<text x="62" y="879" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Toolsets: jira_*  confluence_*  glab_*  doc_gen  skills</text>
+<text x="62" y="896.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Reads run freely; writes need approval AND --confirm</text>
+<text x="62" y="914.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Upload folders scoped per user (path-confined)</text>
+<text x="62" y="931.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Submodule agent-skills, pinned to a release tag</text>
+<rect x="428.2" y="826" width="27.799999999999997" height="19" rx="9.5" fill="#0891b2"/>
+<text x="442.1" y="839.5" font-size="11" font-weight="600" fill="#fff" text-anchor="middle">MCP</text>
+<rect x="486" y="818" width="400" height="208" rx="12" fill="#ecfeff" stroke="#0891b2" stroke-width="1.6" filter="url(#sh)"/>
+<text x="500" y="842" font-size="15" font-weight="700" fill="#083344" text-anchor="start">mcp-agent-skills-gateway   (gateway-tools)</text>
+<text x="500" y="859" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">same image, a network only the gateway joins</text>
+<text x="502" y="879" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">No upload volume, never told which user is calling</text>
+<text x="502" y="896.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Gets credentials only from headers the gateway sends</text>
+<text x="502" y="914.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Separate so a client of one can never reach the other</text>
+<rect x="848.2" y="826" width="27.799999999999997" height="19" rx="9.5" fill="#0891b2"/>
+<text x="862.1" y="839.5" font-size="11" font-weight="600" fill="#fff" text-anchor="middle">MCP</text>
+<rect x="906" y="818" width="380" height="208" rx="12" fill="#ecfeff" stroke="#0891b2" stroke-width="1.6" filter="url(#sh)"/>
+<text x="920" y="842" font-size="15" font-weight="700" fill="#083344" text-anchor="start">mcp-kb   (backend + gateway-kb)</text>
+<text x="920" y="859" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">the catalog's query path: two read-only tools</text>
+<text x="922" y="879" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">kb_search(queries, catalog_queries, types?, tags?, limit?)</text>
+<text x="922" y="896.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">kb_get(id, offset?)  -&gt;  entry + kept text, paged</text>
+<text x="922" y="914.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Takes no credentials; connects as read-only kb_reader</text>
+<text x="922" y="931.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Never calls a model: works when the LLM is down</text>
+<rect x="1248.2" y="826" width="27.799999999999997" height="19" rx="9.5" fill="#0891b2"/>
+<text x="1262.1" y="839.5" font-size="11" font-weight="600" fill="#fff" text-anchor="middle">MCP</text>
+<rect x="1306" y="818" width="250" height="208" rx="12" fill="#ecfeff" stroke="#0891b2" stroke-width="1.6" filter="url(#sh)"/>
+<text x="1320" y="842" font-size="15" font-weight="700" fill="#083344" text-anchor="start">Web search</text>
+<text x="1320" y="859" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">searxng -&gt; crw (scrape)</text>
+<text x="1322" y="879" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">LibreChat native web search</text>
+<text x="1322" y="896.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">crw sits alone on `scraper`:</text>
+<text x="1322" y="914.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">it fetches URLs the internet</text>
+<text x="1322" y="931.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">chose, so it can reach nothing</text>
+<text x="1322" y="949.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">else in the stack</text>
+<rect x="1576" y="818" width="220" height="208" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="7 5"/>
+<text x="1590" y="842" font-size="13.5" font-weight="700" fill="#475569" text-anchor="start">Your MCP server</text>
+<text x="1592" y="862" font-size="12" font-weight="400" fill="#334155" text-anchor="start">Add a 3-line entry to</text>
+<text x="1592" y="879.5" font-size="12" font-weight="400" fill="#334155" text-anchor="start">mcp-servers.yaml (gateway)</text>
+<text x="1592" y="897.0" font-size="12" font-weight="400" fill="#334155" text-anchor="start">or librechat.yaml (UI).</text>
+<text x="1592" y="914.5" font-size="12" font-weight="400" fill="#334155" text-anchor="start">Its tools show up in the</text>
+<text x="1592" y="932.0" font-size="12" font-weight="400" fill="#334155" text-anchor="start">agents' tool lists.</text>
+<g transform="translate(1762,828)" stroke="#64748b" stroke-width="1.8" fill="none" stroke-linecap="round"><path d="M6 0v7M16 0v7"/><rect x="2" y="7" width="18" height="9" rx="3" fill="#e2e8f0"/><path d="M11 16v5"/></g>
+<path d="M300 762 L300 818" fill="none" stroke="#4f46e5" stroke-width="1.8" marker-end="url(#ar)"/>
+<rect x="260.9" y="785" width="78.2" height="17" rx="4" fill="#fff" fill-opacity="0.92"/>
+<text x="300" y="797" font-size="11" font-weight="600" fill="#4f46e5" text-anchor="middle">agent-tools</text>
+<path d="M560 762 L560 776 L960 776 L960 818" fill="none" stroke="#4f46e5" stroke-width="1.8" marker-end="url(#ar)"/>
+<text x="760" y="770" font-size="11" font-weight="600" fill="#4f46e5" text-anchor="middle">LibreChat -&gt; mcp-kb (backend)</text>
+<path d="M1400 762 L1400 818" fill="none" stroke="#4f46e5" stroke-width="1.8" marker-end="url(#ar)"/>
+<rect x="1364.0" y="785" width="72.0" height="17" rx="4" fill="#fff" fill-opacity="0.92"/>
+<text x="1400" y="797" font-size="11" font-weight="600" fill="#4f46e5" text-anchor="middle">web search</text>
+<path d="M1050 762 L1050 784 L700 784 L700 818" fill="none" stroke="#7c3aed" stroke-width="1.8" marker-end="url(#ar)"/>
+<text x="880" y="798" font-size="11" font-weight="600" fill="#7c3aed" text-anchor="middle">gateway-tools</text>
+<path d="M1180 762 L1180 818" fill="none" stroke="#7c3aed" stroke-width="1.8" marker-end="url(#ar)"/>
+<rect x="1144.0" y="785" width="72.0" height="17" rx="4" fill="#fff" fill-opacity="0.92"/>
+<text x="1180" y="797" font-size="11" font-weight="600" fill="#7c3aed" text-anchor="middle">gateway-kb</text>
+<rect x="24" y="1060" width="700" height="150" rx="18" fill="none" stroke="#cbd5e1" stroke-width="1.4" stroke-dasharray="3 6"/>
+<text x="40" y="1081" font-size="11.5" font-weight="700" fill="#64748b" text-anchor="start">EXTERNAL SYSTEMS</text>
+<text x="708" y="1081" font-size="11.5" font-weight="400" fill="#94a3b8" text-anchor="end">what the tools reach</text>
+<rect x="46" y="1088" width="200" height="100" rx="12" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.6"/>
+<text x="60" y="1112" font-size="15" font-weight="700" fill="#334155" text-anchor="start">Jira</text>
+<text x="62" y="1132" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">issues, comments,</text>
+<text x="62" y="1149.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">worklogs, sprints</text>
+<rect x="260" y="1088" width="200" height="100" rx="12" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.6"/>
+<text x="274" y="1112" font-size="15" font-weight="700" fill="#334155" text-anchor="start">Confluence</text>
+<text x="276" y="1132" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">specs, runbooks,</text>
+<text x="276" y="1149.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">labels spec-draft/approved</text>
+<rect x="474" y="1088" width="230" height="100" rx="12" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.6"/>
+<text x="488" y="1112" font-size="15" font-weight="700" fill="#334155" text-anchor="start">GitLab</text>
+<text x="490" y="1132" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">repos, ADRs, MRs</text>
+<text x="490" y="1149.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">read-only service account</text>
+<path d="M250 1026 L250 1088" fill="none" stroke="#475569" stroke-width="1.8" stroke-dasharray="6 5" marker-end="url(#ar)"/>
+<path d="M660 1026 L400 1088" fill="none" stroke="#475569" stroke-width="1.8" stroke-dasharray="6 5" marker-end="url(#ar)"/>
+<path d="M350 1026 L560 1088" fill="none" stroke="#475569" stroke-width="1.8" stroke-dasharray="6 5" marker-end="url(#ar)"/>
+<rect x="744" y="1060" width="1072" height="150" rx="18" fill="none" stroke="#cbd5e1" stroke-width="1.4" stroke-dasharray="3 6"/>
+<text x="760" y="1081" font-size="11.5" font-weight="700" fill="#64748b" text-anchor="start">MODEL ENDPOINT</text>
+<text x="1800" y="1081" font-size="11.5" font-weight="400" fill="#94a3b8" text-anchor="end">one setting, swap freely: vLLM, a gateway, a hosted API</text>
+<rect x="766" y="1088" width="380" height="100" rx="12" fill="#fff1f2" stroke="#e11d48" stroke-width="1.6" filter="url(#sh)"/>
+<text x="780" y="1112" font-size="15" font-weight="700" fill="#4c0519" text-anchor="start">Upstream LLM</text>
+<text x="782" y="1132" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">VLLM_BASE_URL + VLLM_API_KEY + default model (.env)</text>
+<text x="782" y="1149.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Used by LibreChat, by the gateway, and by kb's summarizer</text>
+<rect x="1048.8" y="1096" width="87.19999999999999" height="19" rx="9.5" fill="#e11d48"/>
+<text x="1092.4" y="1109.5" font-size="11" font-weight="600" fill="#fff" text-anchor="middle">swap in .env</text>
+<rect x="1166" y="1088" width="330" height="100" rx="12" fill="#fff1f2" stroke="#e11d48" stroke-width="1.6" filter="url(#sh)"/>
+<text x="1180" y="1112" font-size="15" font-weight="700" fill="#4c0519" text-anchor="start">Embeddings (RAG)</text>
+<text x="1182" y="1132" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">rag_api embeds uploaded files</text>
+<text x="1182" y="1149.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">into vectordb (pgvector)</text>
+<rect x="1516" y="1088" width="280" height="100" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="7 5"/>
+<text x="1530" y="1112" font-size="13.5" font-weight="700" fill="#475569" text-anchor="start">Another model / provider</text>
+<text x="1532" y="1132" font-size="12" font-weight="400" fill="#334155" text-anchor="start">add an endpoint entry</text>
+<text x="1532" y="1149.5" font-size="12" font-weight="400" fill="#334155" text-anchor="start">or repoint the .env</text>
+<g transform="translate(1762,1098)" stroke="#64748b" stroke-width="1.8" fill="none" stroke-linecap="round"><path d="M6 0v7M16 0v7"/><rect x="2" y="7" width="18" height="9" rx="3" fill="#e2e8f0"/><path d="M11 16v5"/></g>
+<rect x="24" y="1230" width="1792" height="396" rx="18" fill="none" stroke="#f59e0b" stroke-width="1.4" stroke-dasharray="3 6"/>
+<text x="40" y="1251" font-size="11.5" font-weight="700" fill="#64748b" text-anchor="start">5  KB -- THE KNOWLEDGE CATALOG</text>
+<text x="1800" y="1251" font-size="11.5" font-weight="400" fill="#94a3b8" text-anchor="end">pointers + summaries, never document bodies</text>
+<rect x="46" y="1262" width="238" height="228" rx="12" fill="#fffbeb" stroke="#d97706" stroke-width="1.6" filter="url(#sh)"/>
+<text x="60" y="1286" font-size="15" font-weight="700" fill="#451a03" text-anchor="start">Sources</text>
+<text x="60" y="1303" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">kb/config/sources.yaml</text>
+<text x="62" y="1323" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">confluence-*  spaces</text>
+<text x="62" y="1340.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">jira-*  projects</text>
+<text x="62" y="1358.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">gitlab-*  repo paths</text>
+<text x="62" y="1375.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">form  hand-written records</text>
+<text x="62" y="1393.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start"></text>
+<text x="62" y="1410.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Add one: a block in the yaml</text>
+<text x="62" y="1428.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">(+ 1 adapter file for a</text>
+<text x="62" y="1445.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">new kind of source)</text>
+<rect x="46" y="1500" width="238" height="70" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="7 5"/>
+<text x="60" y="1524" font-size="13.5" font-weight="700" fill="#475569" text-anchor="start">New source kind</text>
+<text x="62" y="1544" font-size="12" font-weight="400" fill="#334155" text-anchor="start">http_api, local_files, DataHub</text>
+<g transform="translate(250,1510)" stroke="#64748b" stroke-width="1.8" fill="none" stroke-linecap="round"><path d="M6 0v7M16 0v7"/><rect x="2" y="7" width="18" height="9" rx="3" fill="#e2e8f0"/><path d="M11 16v5"/></g>
+<rect x="310" y="1262" width="260" height="150" rx="12" fill="#fffbeb" stroke="#d97706" stroke-width="1.6" filter="url(#sh)"/>
+<text x="324" y="1286" font-size="15" font-weight="700" fill="#451a03" text-anchor="start">Source adapters</text>
+<text x="324" y="1303" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">adapters/outbound/*_source.py</text>
+<text x="326" y="1323" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">map, never decide:</text>
+<text x="326" y="1340.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">-&gt; SourceDocument</text>
+<text x="326" y="1358.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">(id, title, body, version,</text>
+<text x="326" y="1375.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">location, tags)</text>
+<rect x="310" y="1428" width="260" height="142" rx="12" fill="#fffbeb" stroke="#d97706" stroke-width="1.6" filter="url(#sh)"/>
+<text x="324" y="1452" font-size="15" font-weight="700" fill="#451a03" text-anchor="start">Summarizer</text>
+<text x="324" y="1469" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">the only model call, at sync time</text>
+<text x="326" y="1489" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">title + summary + keywords</text>
+<text x="326" y="1506.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">per KB_SUMMARY_LANGUAGES</text>
+<text x="326" y="1524.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">output is data, validated</text>
+<text x="326" y="1541.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">unchanged doc = no call</text>
+<rect x="532.2" y="1436" width="27.799999999999997" height="19" rx="9.5" fill="#d97706"/>
+<text x="546.1" y="1449.5" font-size="11" font-weight="600" fill="#fff" text-anchor="middle">LLM</text>
+<path d="M284 1337 L310 1337" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#ar)"/>
+<path d="M440 1412 L440 1428" fill="none" stroke="#d97706" stroke-width="1.8" stroke-dasharray="6 5" marker-end="url(#ar)"/>
+<rect x="596" y="1262" width="296" height="340" rx="12" fill="#fffbeb" stroke="#d97706" stroke-width="1.6" filter="url(#sh)"/>
+<text x="610" y="1286" font-size="15" font-weight="700" fill="#451a03" text-anchor="start">Reconcile  (one funnel)</text>
+<text x="610" y="1303" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">use_cases/reconcile_document.py</text>
+<text x="612" y="1323" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">1. hash the content + version</text>
+<text x="612" y="1340.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">2. same hash  -&gt; touch last_seen only</text>
+<text x="612" y="1358.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">3. changed    -&gt; summarize, rebuild</text>
+<text x="612" y="1375.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">4. gone       -&gt; soft delete, report</text>
+<text x="612" y="1393.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">5. back       -&gt; revive, don't duplicate</text>
+<text x="612" y="1410.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">6. apply overrides (kept separately)</text>
+<text x="612" y="1428.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">7. validate: an entry whose doc could</text>
+<text x="612" y="1445.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">   never be fetched is rejected</text>
+<text x="612" y="1463.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start"></text>
+<text x="612" y="1480.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Every freshness mechanism ends here,</text>
+<text x="612" y="1498.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">so four mechanisms can't drift into</text>
+<text x="612" y="1515.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">four definitions of an entry.</text>
+<path d="M570 1337 L596 1337" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#ar)"/>
+<path d="M570 1499 L596 1499" fill="none" stroke="#d97706" stroke-width="1.8" stroke-dasharray="6 5" marker-end="url(#ar)"/>
+<rect x="918" y="1262" width="330" height="340" rx="12" fill="#ecfdf5" stroke="#059669" stroke-width="1.6" filter="url(#sh)"/>
+<text x="932" y="1286" font-size="15" font-weight="700" fill="#022c22" text-anchor="start">kb-db  (its own Postgres)</text>
+<text x="932" y="1303" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">separate from LibreChat's vectordb</text>
+<text x="934" y="1323" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">entry           whole entry as JSONB</text>
+<text x="934" y="1340.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">entry_search    normalized, pg_trgm</text>
+<text x="934" y="1358.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">   title_norm keywords_norm</text>
+<text x="934" y="1375.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">   summary_norm haystack</text>
+<text x="934" y="1393.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">entry_content   kept text (opt-in sources)</text>
+<text x="934" y="1410.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">entry_override  hand corrections</text>
+<text x="934" y="1428.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">form_record     manual records</text>
+<text x="934" y="1445.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">sync_request    queue from the console</text>
+<text x="934" y="1463.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">sync_run        every run, with counts</text>
+<text x="934" y="1480.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">search_miss     gap log: unanswered queries</text>
+<text x="934" y="1498.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start"></text>
+<text x="934" y="1515.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Roles: owner (sync) | kb_reader | kb_admin</text>
+<rect x="1131.0" y="1270" width="107.0" height="19" rx="9.5" fill="#059669"/>
+<text x="1184.5" y="1283.5" font-size="11" font-weight="600" fill="#fff" text-anchor="middle">pg15 + pgvector</text>
+<path d="M892 1400 L918 1400" fill="none" stroke="#059669" stroke-width="1.8" marker-end="url(#ar)"/>
+<rect x="884.5" y="1376" width="41.0" height="17" rx="4" fill="#fff" fill-opacity="0.92"/>
+<text x="905" y="1388" font-size="11" font-weight="600" fill="#059669" text-anchor="middle">write</text>
+<rect x="1274" y="1262" width="262" height="150" rx="12" fill="#fffbeb" stroke="#d97706" stroke-width="1.6" filter="url(#sh)"/>
+<text x="1288" y="1286" font-size="15" font-weight="700" fill="#451a03" text-anchor="start">kb-scheduler</text>
+<text x="1288" y="1303" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">the ONLY writer of the catalog</text>
+<text x="1290" y="1323" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">incremental   every 15 min</text>
+<text x="1290" y="1340.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">full + deletions  nightly</text>
+<text x="1290" y="1358.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">lazy refresh  when a stale</text>
+<text x="1290" y="1375.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">   entry is read (every 60 s)</text>
+<text x="1290" y="1393.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">webhook       GitLab push</text>
+<path d="M1274 1330 L1248 1330" fill="none" stroke="#d97706" stroke-width="1.8" stroke-dasharray="6 5" marker-end="url(#ar)"/>
+<rect x="1237.4" y="1306" width="47.2" height="17" rx="4" fill="#fff" fill-opacity="0.92"/>
+<text x="1261" y="1318" font-size="11" font-weight="600" fill="#d97706" text-anchor="middle">writes</text>
+<rect x="1274" y="1428" width="262" height="142" rx="12" fill="#fffbeb" stroke="#d97706" stroke-width="1.6" filter="url(#sh)"/>
+<text x="1288" y="1452" font-size="15" font-weight="700" fill="#451a03" text-anchor="start">kb-admin  (opt-in)</text>
+<text x="1288" y="1469" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">127.0.0.1:8324, token sign-in</text>
+<text x="1290" y="1489" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">status, runs, gaps, schedules</text>
+<text x="1290" y="1506.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">edit sources.yaml (preview+approve)</text>
+<text x="1290" y="1524.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">manual form records</text>
+<text x="1290" y="1541.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">can't write the catalog: it queues</text>
+<text x="1290" y="1559.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">sync_request, scheduler runs it</text>
+<rect x="1432.2" y="1436" width="93.8" height="19" rx="9.5" fill="#d97706"/>
+<text x="1479.1" y="1449.5" font-size="11" font-weight="600" fill="#fff" text-anchor="middle">profile admin</text>
+<path d="M1405 1428 L1405 1412" fill="none" stroke="#d97706" stroke-width="1.8" stroke-dasharray="6 5" marker-end="url(#ar)"/>
+<rect x="1384.5" y="1412" width="41.0" height="17" rx="4" fill="#fff" fill-opacity="0.92"/>
+<text x="1405" y="1424" font-size="11" font-weight="600" fill="#d97706" text-anchor="middle">queue</text>
+<rect x="1562" y="1262" width="234" height="340" rx="12" fill="#ecfeff" stroke="#0891b2" stroke-width="1.6" filter="url(#sh)"/>
+<text x="1576" y="1286" font-size="14.5" font-weight="700" fill="#083344" text-anchor="start">How kb_search works</text>
+<text x="1576" y="1303" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">runs inside mcp-kb; no model call</text>
+<text x="1578" y="1323" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">1 normalize every phrase</text>
+<text x="1578" y="1340.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">   fold fa/ar letters, digits,</text>
+<text x="1578" y="1358.0" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">   ZWNJ = boundary, casefold</text>
+<text x="1578" y="1375.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">2 queries + catalog_queries,</text>
+<text x="1578" y="1393.0" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">   dedupe, cap 500 chars</text>
+<text x="1578" y="1410.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">3 per phrase: split terms</text>
+<text x="1578" y="1428.0" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">   (&gt;=3 chars) -&gt; SQL</text>
+<text x="1578" y="1445.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">   3.0 title + 2.0 keywords</text>
+<text x="1578" y="1463.0" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">   + 1.0 summary similarity</text>
+<text x="1578" y="1480.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">   + 1.0 exact substring</text>
+<text x="1578" y="1498.0" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">4 over-fetch max(30, 4*limit)</text>
+<text x="1578" y="1515.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">5 reciprocal rank fusion k=60</text>
+<text x="1578" y="1533.0" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">6 drop excluded/deleted, apply</text>
+<text x="1578" y="1550.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">   overrides, flag stale</text>
+<text x="1578" y="1568.0" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">7 hits + fetch hint; agent then</text>
+<text x="1578" y="1585.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">   reads the real document</text>
+<path d="M1156 1026 L1156 1262" fill="none" stroke="#059669" stroke-width="1.8" marker-end="url(#ar)"/>
+<rect x="1073.5" y="1238" width="165.0" height="17" rx="4" fill="#fff" fill-opacity="0.92"/>
+<text x="1156" y="1250" font-size="11" font-weight="600" fill="#059669" text-anchor="middle">read-only SQL (kb_reader)</text>
+<rect x="24" y="1646" width="1792" height="50" rx="12" fill="#f8fafc" stroke="#cbd5e1"/>
+<text x="40" y="1668" font-size="11.5" font-weight="800" fill="#475569" text-anchor="start">THE FIVE PLUGS</text>
+<text x="40" y="1685" font-size="11" font-weight="400" fill="#94a3b8" text-anchor="start" font-style="italic">swap a part by honoring its contract</text>
+<rect x="330" y="1656" width="105.0" height="19" rx="9.5" fill="#4f46e5"/>
+<text x="382.5" y="1669.5" font-size="11.5" font-weight="600" fill="#fff" text-anchor="middle">OpenAI HTTP API</text>
+<text x="330" y="1686" font-size="11" font-weight="400" fill="#64748b" text-anchor="start">clients &lt;-&gt; gateway / LibreChat</text>
+<rect x="557.1" y="1656" width="73.0" height="19" rx="9.5" fill="#4f46e5"/>
+<text x="593.6" y="1669.5" font-size="11.5" font-weight="600" fill="#fff" text-anchor="middle">Agent YAML</text>
+<text x="557.1" y="1686" font-size="11" font-weight="400" fill="#64748b" text-anchor="start">agents/*.yaml, gateway config/agents</text>
+<rect x="814.7" y="1656" width="92.2" height="19" rx="9.5" fill="#4f46e5"/>
+<text x="860.8000000000001" y="1669.5" font-size="11.5" font-weight="600" fill="#fff" text-anchor="middle">MCP over HTTP</text>
+<text x="814.7" y="1686" font-size="11" font-weight="400" fill="#64748b" text-anchor="start">tool servers</text>
+<rect x="944.9000000000001" y="1656" width="201.0" height="19" rx="9.5" fill="#4f46e5"/>
+<text x="1045.4" y="1669.5" font-size="11.5" font-weight="600" fill="#fff" text-anchor="middle">KnowledgeSource + sources.yaml</text>
+<text x="944.9000000000001" y="1686" font-size="11" font-weight="400" fill="#64748b" text-anchor="start">knowledge</text>
+<rect x="1183.9" y="1656" width="175.4" height="19" rx="9.5" fill="#4f46e5"/>
+<text x="1271.6000000000001" y="1669.5" font-size="11.5" font-weight="600" fill="#fff" text-anchor="middle">OpenAI-compatible endpoint</text>
+<text x="1183.9" y="1686" font-size="11" font-weight="400" fill="#64748b" text-anchor="start">the model</text>
+<text x="32" y="1742" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="start">Networks: frontend (api, admin-panel) | backend (api + most internal services) | agent-tools (api + mcp-agent-skills) | scraper (api + crw) | gateway-api (api + gateway) | gateway-tools, gateway-kb, gateway-data (gateway only).</text>
+</svg>
