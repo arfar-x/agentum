@@ -351,3 +351,12 @@ def test_the_module_is_self_contained_on_disk():
 
 def compose_text() -> str:
     return COMPOSE.read_text(encoding="utf-8")
+
+
+def test_every_kb_service_shares_one_image(compose):
+    # Covers: NFR-DEP-02
+    # The profile-gated services (kb-cli, kb-webhook, kb-admin) are never built
+    # by `make up`; sharing the tag of the always-on services is what keeps them
+    # from running a stale image against a newer catalog.
+    for name in ("mcp-kb", "kb-cli", "kb-scheduler", "kb-webhook", "kb-admin"):
+        assert "<<: *kb-image" in _service_block(compose, name), name

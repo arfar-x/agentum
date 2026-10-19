@@ -9,6 +9,15 @@
 # (they hold the source credentials and the owner database role); the query path
 # gets an explicit list and nothing else (NFR-CFG-03).
 
+# Every kb service is the same image (one Dockerfile, one build context; the
+# command and role differ). They share one tag so a single build serves them
+# all: otherwise the profile-gated services (kb-cli, kb-webhook, kb-admin) keep
+# whatever image they were last built with, and `make up` -- which never builds
+# a profile it isn't starting -- leaves them running old code against a newer
+# catalog.
+x-kb-image: &kb-image
+  image: agentflow-kb
+
 volumes:
   kb_data:
 
@@ -48,6 +57,7 @@ services:
   # (read-only, plus the gap log), never as the database owner, and it has no
   # `env_file:` -- so it cannot see the owner password or any source credential.
   mcp-kb:
+    <<: *kb-image
     build:
       context: .
     restart: unless-stopped
@@ -78,6 +88,7 @@ services:
   # the database owner, while the query path holds the read-only role and must
   # keep holding only that.
   kb-cli:
+    <<: *kb-image
     build:
       context: .
     profiles: ["cli"]
@@ -115,6 +126,7 @@ services:
   # never wait behind one. It is also the only component holding both source
   # credentials and a writable database role.
   kb-scheduler:
+    <<: *kb-image
     build:
       context: .
     restart: unless-stopped
@@ -140,6 +152,7 @@ services:
   # its own -- it queues paths the scheduler then refreshes. Disabled unless
   # you give it a secret; start it with `--profile webhook`.
   kb-webhook:
+    <<: *kb-image
     build:
       context: .
     profiles: ["webhook"]
@@ -177,6 +190,7 @@ services:
   #  - Deliberately NO env_file: it is handed exactly the variables below, so
   #    no source credential ever reaches a web-facing process.
   kb-admin:
+    <<: *kb-image
     build:
       context: .
     profiles: ["admin"]
