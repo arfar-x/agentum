@@ -18,18 +18,27 @@ export function Modal({ title, subtitle, icon, onClose, children, footer, width 
   const titleId = useId();
   const panel = useRef<HTMLDivElement>(null);
 
+  // Callers pass a fresh onClose on every render, and the console re-renders
+  // whenever it polls. Reading them through refs keeps this effect to one run
+  // per open: re-running it would move focus to the panel (and back to the
+  // opener) under someone who is typing.
+  const onCloseRef = useRef(onClose);
+  const busyRef = useRef(busy);
+  onCloseRef.current = onClose;
+  busyRef.current = busy;
+
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     panel.current?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !busy) onClose();
+      if (event.key === 'Escape' && !busyRef.current) onCloseRef.current();
     };
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('keydown', onKey);
       previous?.focus?.();
     };
-  }, [onClose, busy]);
+  }, []);
 
   return (
     <div
