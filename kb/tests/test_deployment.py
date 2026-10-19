@@ -93,7 +93,9 @@ def test_the_mcp_server_is_internal_only(compose):
     assert "\n  mcp-kb:" in compose
     block = _service_block(compose, "mcp-kb")
     assert "ports:" not in block
-    assert "networks: [backend]" in block
+    # gateway-kb is the agent gateway's read-only path to the catalog; it is
+    # not `backend`, so the gateway still cannot reach anything else there.
+    assert "networks: [backend, gateway-kb]" in block
 
 
 def test_the_mcp_server_connects_as_the_read_only_role(compose):
