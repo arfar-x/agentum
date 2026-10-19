@@ -26,7 +26,7 @@ def make_server():
         raise ValueError("kaput")
 
     @mcp.tool
-    def kb_search(queries: list[str], limit: int = 5, types: list[str] | None = None) -> dict:
+    def kb_search(queries: list[str], catalog_queries: list[str], limit: int = 5, types: list[str] | None = None) -> dict:
         return {"hits": [{"title": {"en": queries[0]}}], "queries": queries}
 
     return mcp

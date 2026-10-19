@@ -79,7 +79,11 @@ class KbRetriever:
         self._tools, self._server, self._tool = tools, server, tool
 
     async def search(self, queries: list[str], limit: int, types: tuple[str, ...]) -> list[dict[str, Any]]:
-        args: dict[str, Any] = {"queries": queries, "limit": limit}
+        # The catalog requires the question rewritten in its own language
+        # (`catalog_queries`). This lookup runs before any model sees the turn,
+        # so there is nothing to translate with: the user's words go in both
+        # places, which is what the catalog accepted before the field existed.
+        args: dict[str, Any] = {"queries": queries, "catalog_queries": queries, "limit": limit}
         if types:
             args["types"] = list(types)
         result = await self._tools.call(self._server, self._tool, args, {})

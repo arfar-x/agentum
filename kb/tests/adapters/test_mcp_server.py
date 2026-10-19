@@ -70,9 +70,9 @@ def test_the_tool_schemas_tell_a_model_how_to_call_them(tools):
     # Covers: FR-MCP-02
     search = tools["kb_search"]
     parameters = search.parameters["properties"]
-    assert set(parameters) == {"queries", "types", "tags", "limit"}
+    assert set(parameters) == {"queries", "catalog_queries", "types", "tags", "limit"}
     assert parameters["queries"]["type"] == "array", "several queries in one call"
-    assert search.parameters["required"] == ["queries"]
+    assert search.parameters["required"] == ["queries", "catalog_queries"]
     # The instructions that make this work have to reach the model, not just
     # the spec: search in both languages, and read the real document rather
     # than answering from the summary.
@@ -84,7 +84,7 @@ def test_the_tool_schemas_tell_a_model_how_to_call_them(tools):
 
 def test_search_returns_hits_with_the_next_call_to_make(app):
     # Covers: FR-MCP-02, FR-ENT-09
-    payload = call(app, "kb_search", queries=["refund retries", "بازپرداخت"])
+    payload = call(app, "kb_search", queries=["refund retries", "بازپرداخت"], catalog_queries=["refund retries"])
     assert [hit["id"] for hit in payload["hits"]] == [REFUNDS.id]
     hit = payload["hits"][0]
     assert hit["fetch"] == {"tool": "confluence_get_page", "args": {"page_id": "1"}}
@@ -93,7 +93,7 @@ def test_search_returns_hits_with_the_next_call_to_make(app):
 
 
 def test_search_reports_an_empty_catalog_rather_than_failing(app):
-    payload = call(app, "kb_search", queries=["quarterly hiring plan"])
+    payload = call(app, "kb_search", queries=["quarterly hiring plan"], catalog_queries=["quarterly hiring plan"])
     assert payload["hits"] == []
     assert payload["notes"] == ["nothing in the catalog matched"]
 
@@ -106,7 +106,7 @@ def test_get_returns_one_entry_and_a_structured_not_found(app):
 
 def test_an_unknown_type_filter_is_reported_not_raised(app):
     # Covers: FR-MCP-03
-    payload = call(app, "kb_search", queries=["refund"], types=["diagram"])
+    payload = call(app, "kb_search", queries=["refund"], catalog_queries=["refund"], types=["diagram"])
     assert payload["error"]["type"] == "bad_argument"
 
 
@@ -120,7 +120,7 @@ def test_a_catalog_that_is_down_returns_an_error_the_agent_can_explain(app, monk
     monkeypatch.setattr(SearchCatalog, "execute", explode)
     monkeypatch.setattr(GetEntry, "execute", explode)
 
-    for payload in (call(app, "kb_search", queries=["refund"]), call(app, "kb_get", id=REFUNDS.id)):
+    for payload in (call(app, "kb_search", queries=["refund"], catalog_queries=["refund"]), call(app, "kb_get", id=REFUNDS.id)):
         assert payload["error"]["type"] == "catalog_unavailable"
         assert "server closed" in payload["error"]["message"]
 
@@ -178,3 +178,29 @@ def test_kb_get_hands_back_a_page_of_kept_text():
     assert payload["fetch"] == {"tool": "kb_get", "args": {"id": adr.id}}
     assert call(app, "kb_get", id=adr.id, offset=9)["content"]["text"] == "Postgres."
     assert call(app, "kb_get", id=REFUNDS.id)["content"] is None
+
+
+def test_a_question_in_another_language_reaches_the_catalog_through_catalog_queries(app, tools):
+    # Covers: FR-MCP-05
+    # The user's words match nothing in an English catalog; the rewrite does.
+    only_theirs = call(app, "kb_search", queries=["تلاش مجدد بازپرداخت چطور کار می‌کند"], catalog_queries=[" "])
+    assert only_theirs["error"]["type"] == "bad_argument", "a blank rewrite is refused, not searched"
+    assert "catalog_queries" in only_theirs["error"]["message"] and "en" in only_theirs["error"]["message"]
+
+    both = call(
+        app,
+        "kb_search",
+        queries=["تلاش مجدد بازپرداخت چطور کار می‌کند"],
+        catalog_queries=["how are refund retries handled"],
+    )
+    assert [hit["id"] for hit in both["hits"]] == [REFUNDS.id]
+    assert "how are refund retries handled" in " ".join(both["queries"])
+    assert "required" in tools["kb_search"].parameters["properties"]["catalog_queries"]["description"].lower()
+
+
+def test_the_description_names_the_catalogs_languages():
+    # Covers: FR-MCP-05
+    store = FakeEntryStore()
+    persian_catalog = build_app(StubContainer(store), ("en", "fa"))
+    search = {t.name: t for t in asyncio.run(persian_catalog.list_tools())}["kb_search"]
+    assert "en and fa" in search.description

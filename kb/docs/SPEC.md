@@ -4,7 +4,7 @@
 |---|---|
 | **Spec ID** | SPEC-KB-001 |
 | **Status** | Active — implemented (see §12; two source kinds deferred by choice) |
-| **Version** | 2.10.0 |
+| **Version** | 2.11.0 |
 | **Last updated** | 2026-10-18 |
 | **Implements** | `kb/` module, `mcp-kb` service |
 | **Related** | [`AGENTS.md`](../../AGENTS.md), [`CONFIGURATION.md`](CONFIGURATION.md), [`OPERATOR_GUIDE.md`](OPERATOR_GUIDE.md), [`kb/README.md`](../README.md) |
@@ -230,6 +230,7 @@ they parse input, call a use case, and serialize the result.
 | FR-MCP-02 | Each tool's schema MUST describe its arguments well enough for a model to call it correctly without reading the spec, and `kb_search` MUST accept several query strings in one call. | done |
 | FR-MCP-03 | A tool MUST return a structured error rather than raising when the catalog is unreachable, so an agent can say so and carry on instead of failing the turn. | done |
 | FR-MCP-04 | The server MUST NOT accept credentials or per-user variables: the catalog is shared, and there is nothing user-specific for a caller to supply. | done |
+| FR-MCP-05 | `kb_search` MUST require `catalog_queries`: the same question rewritten in the catalog's language(s) (`KB_SUMMARY_LANGUAGES`), named in the tool's description. Both `queries` and `catalog_queries` are searched and fused. A call whose `catalog_queries` has no non-blank phrase MUST return a structured `bad_argument` error that says what to pass, not search. A schema-required argument is what makes a model translate a question out of the user's language; prose in a description does not. | done |
 
 ### 6.8 Sources — `FR-SRC`
 
@@ -360,7 +361,7 @@ catalog -- the console asks it to, through a queue (FR-SCH-11). Designed in
 
 | Tool | Input | Output |
 |---|---|---|
-| `kb_search` | `queries[]`, `types[]?`, `tags[]?`, `limit?` | hits: entry, score, `stale`, fetch hint; plus the normalized queries actually searched |
+| `kb_search` | `queries[]`, `catalog_queries[]`, `types[]?`, `tags[]?`, `limit?` | hits: entry, score, `stale`, fetch hint; plus the normalized queries actually searched |
 | `kb_get` | `id`, `offset?` | one entry in full; triggers a lazy refresh when stale (FR-REC-10); for a source storing raw content, one page of the document's text (FR-CNT-08) |
 
 ### 8.2 CLI / make targets
@@ -516,6 +517,7 @@ which a flat catalog cannot answer.
 |---|---|---|
 | 2.8.0 | 2026-10-13 | Added §7.4 (NFR-CFG-01..05). The module is now self-contained: its services (`kb/compose.yaml`, included by the root file), variables (`kb/.env.example` -> `kb/.env`), source configuration (`kb/config/sources.yaml`), scripts, make targets, operator guide and this spec all live under `kb/`. The sync services no longer receive the stack's whole `.env`, and the query path still receives no env file. `kb/config.py` is the only module that reads the process environment: `kb/config.py` is the only module that reads the process environment. The webhook receiver, the migrations directory and the source-config loader had each read variables directly, so "which variables does this process need" had no single answer. |
 | 1.0.0 | 2026-09-24 | First specification. Phases 1–3 implemented against it. |
+| 2.11.0 | 2026-10-19 | Added FR-MCP-05: `kb_search` requires `catalog_queries`, the question rewritten in the catalog's language. Documents are catalogued only in `KB_SUMMARY_LANGUAGES`, and a question that reached the catalog in another language (a Persian question against English-only entries) found nothing; the instruction to add the other language lived only in a tool description and was often skipped. |
 | 2.10.0 | 2026-10-18 | Added FR-ADM-21: the record editor puts the summary under the control that drafts it, and shows the summary the catalog currently serves beside it. Before this the summary field sat at the top of the form and nothing near the draft control showed a value. |
 | 2.9.0 | 2026-10-17 | Production hardening of the admin console and its neighbours: NFR-DEP-09 (a lost database connection is replaced, not fatal -- before this, a database restart left the scheduler, console and MCP server failing until restarted by hand) FR-ADM-17 (health reflects the database) and FR-ADM-18 (bounded request bodies; a record's text fits what is kept) FR-CFG-13 (a configuration write is verified, and undone if it fails), FR-CFG-14 and FR-CFG-15 (the console cannot point a source at another component's secrets; source ids are case-insensitively unique), and FR-ADM-19 and FR-ADM-20 (stale record saves are refused; the console reports the scheduler's view of its own environment). The scheduler now publishes manual records that were saved or deleted without its being asked. |
 | 2.8.0 | 2026-10-14 | Added §6.11 (FR-ADM-01..16), FR-SCH-08..13, FR-CFG-10..12, FR-CLI-06, FR-SRC-07 and NFR-DEP-08: an admin console for the operator, in its own opt-in service. It reads run history and the catalog, queues syncs for the scheduler to run, edits the source configuration after an explicit approval, and holds manual `form` records with on-demand summaries. FR-ENT-02 now admits the catalog's own `form` kind; N2 and §11 say what that does and does not change. Run history gained a start-of-run record, a status and the trigger, because "is it running now, and who asked" was not answerable from the end-of-run row alone. |

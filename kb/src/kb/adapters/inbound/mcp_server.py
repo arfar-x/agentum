@@ -34,8 +34,10 @@ field -- the summary is a pointer, not a source. For some sources the catalog
 also keeps each document's full text; for those, `fetch` names `kb_get`, which
 returns the text page by page.
 
-Search in the user's language AND with the same key terms in the other language
-in one call: documents are catalogued in both, and the rankings are combined.
+Every search carries the question twice: as the user wrote it (`queries`) and
+rewritten in the catalog's language (`catalog_queries`, required). Documents are
+catalogued only in that language, so a question that reaches the catalog in
+another one finds nothing; the rankings of both are combined.
 """
 
 
@@ -60,17 +62,26 @@ def _hit_payload(hit: Any) -> dict[str, Any]:
 #: anything a model must know to call the tool correctly is passed explicitly
 #: here. (Per-argument help still comes from the docstring's Args section,
 #: which does reach the schema.)
-SEARCH_DESCRIPTION = """\
+def search_description(languages: tuple[str, ...]) -> str:
+    """The `kb_search` description, naming the languages this catalog is written in."""
+    catalog = " and ".join(languages)
+    return f"""\
 Find which documents answer a question, and where they live.
 
 Returns hits with a `fetch` field naming the tool and arguments that read the
 real document -- always read it before answering; a catalog summary is a
 pointer, not a source. That tool is sometimes `kb_get` itself, for documents
-whose full text the catalog keeps. Search in the user's language AND with the key terms in
-the other language in the same call: documents are catalogued in both, and the
-rankings are combined. A hit marked `stale` may have an out-of-date summary,
-but the document itself is always current.
+whose full text the catalog keeps. A hit marked `stale` may have an
+out-of-date summary, but the document itself is always current.
+
+The catalog is written in: {catalog}. Always pass `queries` (the question in the
+user's own words and language) AND `catalog_queries` (the same question
+rewritten in {catalog}, including the key terms, names and synonyms you would
+expect in a document). Both are searched and the rankings combined. If the
+user already wrote in {catalog}, repeat the question there. A search without
+`catalog_queries` is refused: a question in another language finds nothing.
 """
+
 
 GET_DESCRIPTION = """\
 Everything the catalog knows about one entry, by its id -- and, for sources
@@ -85,12 +96,13 @@ document with the tool named in `fetch`, or point the user to `location.url`.
 """
 
 
-def build_app(container: Container) -> FastMCP:
+def build_app(container: Container, languages: tuple[str, ...] = ("en",)) -> FastMCP:
     app = FastMCP(name="kb", instructions=INSTRUCTIONS)
 
-    @app.tool(description=SEARCH_DESCRIPTION)
+    @app.tool(description=search_description(languages))
     def kb_search(
         queries: list[str],
+        catalog_queries: list[str],
         types: list[str] | None = None,
         tags: list[str] | None = None,
         limit: int | None = None,
@@ -98,9 +110,12 @@ def build_app(container: Container) -> FastMCP:
         """Find which documents answer a question.
 
         Args:
-            queries: One or more search phrases. Pass the user's question in
-                their own language plus its key terms in the other language --
-                both are searched and the rankings combined.
+            queries: The question in the user's own words and language (one
+                or more phrasings).
+            catalog_queries: REQUIRED. The same question rewritten in the
+                catalog's language (named in this tool's description), with
+                its key terms, names and synonyms. Repeat the question if the
+                user already wrote in that language.
             types: Optional filter: doc, spec, product, system, team, person,
                 term.
             tags: Optional filter on an entry's tags.
@@ -111,12 +126,23 @@ def build_app(container: Container) -> FastMCP:
         a summary. A hit marked `stale` may have an out-of-date summary; the
         document itself is always current.
         """
+        catalog_queries = [q for q in catalog_queries if q and q.strip()]
+        if not catalog_queries:
+            return {
+                "error": {
+                    "type": "bad_argument",
+                    "message": (
+                        "catalog_queries is required: pass the same question rewritten in "
+                        f"the catalog's language ({' and '.join(languages)}), then search again."
+                    ),
+                }
+            }
         try:
             parsed_types = [EntryType(t) for t in types] if types else None
         except ValueError as exc:
             return {"error": {"type": "bad_argument", "message": str(exc)}}
         try:
-            result = container.search.execute(queries, types=parsed_types, tags=tags, limit=limit)
+            result = container.search.execute([*queries, *catalog_queries], types=parsed_types, tags=tags, limit=limit)
         except Exception as exc:  # database down, connection dropped, ...
             logger.exception("kb_search failed")
             return {"error": {"type": "catalog_unavailable", "message": str(exc).strip()}}
@@ -164,7 +190,7 @@ def main() -> None:  # pragma: no cover -- the container's entrypoint
 
     settings = Settings.from_env()
     container = build(settings)
-    app = build_app(container)
+    app = build_app(container, settings.summary_languages)
     logger.info("kb mcp server listening on %s:%s/mcp", settings.mcp_host, settings.mcp_port)
     app.run(transport="http", host=settings.mcp_host, port=settings.mcp_port, path="/mcp")
 

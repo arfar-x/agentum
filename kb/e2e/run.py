@@ -227,7 +227,7 @@ def mcp(tool: str, **arguments) -> dict:
 
 
 def search(*queries: str) -> list[dict]:
-    return mcp("kb_search", queries=list(queries))["hits"]
+    return mcp("kb_search", queries=list(queries), catalog_queries=list(queries))["hits"]
 
 
 # ----------------------------------------------------------------------- setup
@@ -286,7 +286,7 @@ def start_stack() -> dict[str, Proc]:
 
 
 def _mcp_up() -> bool:
-    mcp("kb_search", queries=["warmup"])
+    mcp("kb_search", queries=["warmup"], catalog_queries=["warmup"])
     return True
 
 
