@@ -1,0 +1,320 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1840 1800" width="1840" height="1800" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif">
+<defs><filter id="sh" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="2" stdDeviation="2.4" flood-color="#0f172a" flood-opacity="0.10"/></filter><marker id="ar" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#475569"/></marker><linearGradient id="hd" x1="0" x2="1"><stop offset="0" stop-color="#4c1d95"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs>
+<rect width="1840" height="1800" fill="#ffffff"/>
+<rect x="0" y="0" width="1840" height="78" fill="url(#hd)"/>
+<text x="32" y="36" font-size="26" font-weight="800" fill="#fff" text-anchor="start">agent-gateway -- how it works underneath</text>
+<text x="32" y="60" font-size="13.5" font-weight="400" fill="#ede9fe" text-anchor="start">An OpenAI-compatible API in front of an agent runtime. Hexagonal: domain (pure rules) -&gt; application (the turn engine) -&gt; adapters (HTTP, Postgres, Redis, MCP, the model).</text>
+<rect x="24" y="96" width="1792" height="150" rx="18" fill="none" stroke="#cbd5e1" stroke-width="1.4" stroke-dasharray="3 6"/>
+<text x="40" y="117" font-size="11.5" font-weight="700" fill="#64748b" text-anchor="start">A  WHAT ARRIVES</text>
+<text x="1800" y="117" font-size="11.5" font-weight="400" fill="#94a3b8" text-anchor="end">OpenAI's request shape, plus a few headers</text>
+<rect x="46" y="124" width="560" height="108" rx="12" fill="#f1f5f9" stroke="#64748b" stroke-width="1.6" filter="url(#sh)"/>
+<text x="60" y="148" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">Any OpenAI-compatible client</text>
+<text x="62" y="168" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">POST /v1/chat/completions  or  /v1/responses   (stream or not)</text>
+<text x="62" y="185.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">model = an agent id   (or  agent:upstream-model , or any upstream model)</text>
+<text x="62" y="203.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">messages = the WHOLE history -- the client is stateless; the gateway is not told a thread id</text>
+<rect x="626" y="124" width="560" height="108" rx="12" fill="#f1f5f9" stroke="#64748b" stroke-width="1.6" filter="url(#sh)"/>
+<text x="640" y="148" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">Also on the request</text>
+<text x="642" y="168" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Authorization: Bearer agw_...        -&gt; who the user is</text>
+<text x="642" y="185.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">X-Agent-Skills-Env-&lt;VAR&gt;: ...        -&gt; this call's Jira / Confluence / GitLab credentials</text>
+<text x="642" y="203.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">tools[] and a system prompt          -&gt; the client's OWN tools and instructions</text>
+<rect x="1206" y="124" width="590" height="108" rx="12" fill="#f1f5f9" stroke="#64748b" stroke-width="1.6" filter="url(#sh)"/>
+<text x="1220" y="148" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">Not an agent model?</text>
+<text x="1222" y="168" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">Any other model name (and every other /v1/* route) is forwarded to the</text>
+<text x="1222" y="185.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">upstream unchanged, after the same key check: the gateway is a drop-in</text>
+<text x="1222" y="203.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">front for the model endpoint, with agents added on top</text>
+<rect x="24" y="262" width="1792" height="164" rx="18" fill="none" stroke="#cbd5e1" stroke-width="1.4" stroke-dasharray="3 6"/>
+<text x="40" y="283" font-size="11.5" font-weight="700" fill="#64748b" text-anchor="start">B  INBOUND ADAPTER</text>
+<text x="1800" y="283" font-size="11.5" font-weight="400" fill="#94a3b8" text-anchor="end">adapters/inbound/openai_http (FastAPI): /healthz  /v1/models  /v1/chat/completions  /v1/responses  /v1/* proxied</text>
+<rect x="46" y="292" width="322" height="120" rx="10" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.4"/>
+<circle cx="66" cy="314" r="11" fill="#7c3aed"/>
+<text x="66" y="318.5" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">1</text>
+<text x="84" y="319" font-size="13.5" font-weight="700" fill="#2e1065" text-anchor="start">Authenticate</text>
+<text x="60" y="339" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">hash the key, find the user</text>
+<text x="60" y="354" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">in api_keys; revoked = 401</text>
+<rect x="384" y="292" width="322" height="120" rx="10" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.4"/>
+<circle cx="404" cy="314" r="11" fill="#7c3aed"/>
+<text x="404" y="318.5" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">2</text>
+<text x="422" y="319" font-size="13.5" font-weight="700" fill="#2e1065" text-anchor="start">Rate limit</text>
+<text x="398" y="339" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">per key, 120 / minute by</text>
+<text x="398" y="354" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">default (Redis counter)</text>
+<rect x="722" y="292" width="322" height="120" rx="10" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.4"/>
+<circle cx="742" cy="314" r="11" fill="#7c3aed"/>
+<text x="742" y="318.5" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">3</text>
+<text x="760" y="319" font-size="13.5" font-weight="700" fill="#2e1065" text-anchor="start">Route the model</text>
+<text x="736" y="339" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">agent | agent:model |</text>
+<text x="736" y="354" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">upstream passthrough</text>
+<rect x="1060" y="292" width="322" height="120" rx="10" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.4"/>
+<circle cx="1080" cy="314" r="11" fill="#7c3aed"/>
+<text x="1080" y="318.5" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">4</text>
+<text x="1098" y="319" font-size="13.5" font-weight="700" fill="#2e1065" text-anchor="start">Check parameters</text>
+<text x="1074" y="339" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">locked ones refused, tunable</text>
+<text x="1074" y="354" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">ones merged over the agent's</text>
+<rect x="1398" y="292" width="320" height="120" rx="10" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.4"/>
+<circle cx="1418" cy="314" r="11" fill="#7c3aed"/>
+<text x="1418" y="318.5" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">5</text>
+<text x="1436" y="319" font-size="13.5" font-weight="700" fill="#2e1065" text-anchor="start">Build a TurnRequest</text>
+<text x="1412" y="339" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">user, agent, messages, client</text>
+<text x="1412" y="354" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">tools, per-server request vars</text>
+<path d="M368 352 L384 352" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#ar)"/>
+<path d="M706 352 L722 352" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#ar)"/>
+<path d="M1044 352 L1060 352" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#ar)"/>
+<path d="M1382 352 L1398 352" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#ar)"/>
+<path d="M326 232 L326 292" fill="none" stroke="#64748b" stroke-width="1.8" marker-end="url(#ar)"/>
+<path d="M906 232 L906 292" fill="none" stroke="#64748b" stroke-width="1.8" marker-end="url(#ar)"/>
+<path d="M1500 232 L1500 250 L1500 280" fill="none" stroke="#94a3b8" stroke-width="1.8" stroke-dasharray="6 5" marker-end="url(#ar)"/>
+<text x="1522" y="262" font-size="11" font-weight="600" fill="#94a3b8" text-anchor="start">passthrough to upstream</text>
+<rect x="24" y="442" width="1180" height="668" rx="18" fill="none" stroke="#cbd5e1" stroke-width="1.4" stroke-dasharray="3 6"/>
+<text x="40" y="463" font-size="11.5" font-weight="700" fill="#64748b" text-anchor="start">C  APPLICATION -- THE TURN ENGINE</text>
+<text x="1188" y="463" font-size="11.5" font-weight="400" fill="#94a3b8" text-anchor="end">application/turn.py, run as a LangGraph graph: every decision is in the nodes, the graph only fixes their order</text>
+<rect x="46" y="470" width="1136" height="54" rx="12" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.6"/>
+<text x="60" y="494" font-size="14" font-weight="700" fill="#2e1065" text-anchor="start">run_turn:  take a Redis lock on  user + history hash,  then run the nodes until stage = END</text>
+<rect x="46" y="548" width="261" height="300" rx="12" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.6" filter="url(#sh)"/>
+<text x="60" y="572" font-size="15" font-weight="700" fill="#2e1065" text-anchor="start">prepare</text>
+<text x="60" y="589" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">start, or resume a pause</text>
+<text x="62" y="609" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">thread = lookup(user, history hash)</text>
+<text x="62" y="626.5" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">   -&gt; active agent, client opt-in</text>
+<text x="62" y="644.0" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">last message a tool result or an</text>
+<text x="62" y="661.5" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">'approve &lt;code&gt;' reply?</text>
+<text x="62" y="679.0" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">   -&gt; take the PendingTurn, restore its</text>
+<text x="62" y="696.5" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">      hidden work, resume at dispatch</text>
+<text x="62" y="714.0" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">split the client's system prompt;</text>
+<text x="62" y="731.5" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">   &gt; 6000 chars -&gt; condensed by the model</text>
+<text x="62" y="749.0" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">   to ~2500, cached 6 h per user</text>
+<text x="62" y="766.5" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">pre-retrieval: kb_search(user's words)</text>
+<text x="62" y="784.0" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">   a catalog failure never fails the turn</text>
+<rect x="242.8" y="556" width="54.199999999999996" height="19" rx="9.5" fill="#7c3aed"/>
+<text x="269.9" y="569.5" font-size="11" font-weight="600" fill="#fff" text-anchor="middle">stage 1</text>
+<rect x="337" y="548" width="261" height="300" rx="12" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.6" filter="url(#sh)"/>
+<text x="351" y="572" font-size="15" font-weight="700" fill="#2e1065" text-anchor="start">model</text>
+<text x="351" y="589" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">think</text>
+<text x="353" y="609" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">build the toolset for THIS call:</text>
+<text x="353" y="626.5" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">   gateway tools the user has creds for,</text>
+<text x="353" y="644.0" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">   transfer_to_&lt;agent&gt; handoffs, ask_user,</text>
+<text x="353" y="661.5" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">   use_client_tools, the client's tools</text>
+<text x="353" y="679.0" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">compose the prompt: agent instructions</text>
+<text x="353" y="696.5" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">   + client instructions (append | prepend</text>
+<text x="353" y="714.0" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">   | ignore) + a one-line narration note</text>
+<text x="353" y="731.5" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">stream the upstream LLM (3 retries)</text>
+<text x="353" y="749.0" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">empty reply -&gt; correct it, up to 4 times</text>
+<text x="353" y="766.5" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">more than 25 steps -&gt; the turn fails</text>
+<rect x="533.8" y="556" width="54.199999999999996" height="19" rx="9.5" fill="#7c3aed"/>
+<text x="560.9" y="569.5" font-size="11" font-weight="600" fill="#fff" text-anchor="middle">stage 2</text>
+<rect x="628" y="548" width="261" height="300" rx="12" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.6" filter="url(#sh)"/>
+<text x="642" y="572" font-size="15" font-weight="700" fill="#2e1065" text-anchor="start">dispatch</text>
+<text x="642" y="589" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">act</text>
+<text x="644" y="609" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">for each tool call the model made:</text>
+<text x="644" y="626.5" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start"> handoff      -&gt; swap the active agent</text>
+<text x="644" y="644.0" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start"> unknown tool / bad JSON / schema</text>
+<text x="644" y="661.5" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">   violation -&gt; a correction message,</text>
+<text x="644" y="679.0" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">   the model retries</text>
+<text x="644" y="696.5" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start"> client tool  -&gt; return it to the client</text>
+<text x="644" y="714.0" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start"> ask_user     -&gt; pause, ask the client</text>
+<text x="644" y="731.5" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start"> gateway read -&gt; run it now</text>
+<text x="644" y="749.0" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start"> gateway write (in `approval:`) -&gt;</text>
+<text x="644" y="766.5" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">   pause until the user approves</text>
+<rect x="824.8" y="556" width="54.199999999999996" height="19" rx="9.5" fill="#7c3aed"/>
+<text x="851.9" y="569.5" font-size="11" font-weight="600" fill="#fff" text-anchor="middle">stage 3</text>
+<rect x="919" y="548" width="263" height="300" rx="12" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.6" filter="url(#sh)"/>
+<text x="933" y="572" font-size="15" font-weight="700" fill="#2e1065" text-anchor="start">finish</text>
+<text x="933" y="589" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">answer or pause</text>
+<text x="935" y="609" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">persist the thread (active agent,</text>
+<text x="935" y="626.5" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">   client opt-in) under the new hash</text>
+<text x="935" y="644.0" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">emit the final events:</text>
+<text x="935" y="661.5" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">   content, reasoning, tool calls</text>
+<text x="935" y="679.0" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">   for the client, usage</text>
+<text x="935" y="696.5" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">a PAUSE ends here too: the response</text>
+<text x="935" y="714.0" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">   returns a question / approval /</text>
+<text x="935" y="731.5" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">   client tool call; the rest waits</text>
+<text x="935" y="749.0" font-size="11.6" font-weight="400" fill="#334155" text-anchor="start">   in pending_turns</text>
+<rect x="1117.8" y="556" width="54.199999999999996" height="19" rx="9.5" fill="#7c3aed"/>
+<text x="1144.9" y="569.5" font-size="11" font-weight="600" fill="#fff" text-anchor="middle">stage 4</text>
+<path d="M307 700 L337 700" fill="none" stroke="#7c3aed" stroke-width="1.8" marker-end="url(#ar)"/>
+<path d="M598 700 L628 700" fill="none" stroke="#7c3aed" stroke-width="1.8" marker-end="url(#ar)"/>
+<path d="M889 700 L919 700" fill="none" stroke="#7c3aed" stroke-width="1.8" marker-end="url(#ar)"/>
+<text x="322" y="690" font-size="1" font-weight="400" fill="#0f172a" text-anchor="start"></text>
+<path d="M468 848 L468 870 L758 870 L758 848" fill="none" stroke="#7c3aed" stroke-width="1.8" marker-end="url(#ar)"/>
+<text x="613" y="886" font-size="11" font-weight="600" fill="#7c3aed" text-anchor="middle">tool results go back to the model: it loops until it answers</text>
+<path d="M176 848 L176 900 L758 900 L758 848" fill="none" stroke="#7c3aed" stroke-width="1.8" stroke-dasharray="6 5" marker-end="url(#ar)"/>
+<text x="467" y="916" font-size="11" font-weight="600" fill="#7c3aed" text-anchor="middle">after a pause: prepare restores the hidden work and jumps straight to dispatch</text>
+<rect x="46" y="940" width="1136" height="126" rx="12" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.6"/>
+<text x="60" y="964" font-size="14" font-weight="700" fill="#2e1065" text-anchor="start">Safety rails inside every turn</text>
+<text x="62" y="984" font-size="12" font-weight="400" fill="#334155" text-anchor="start">Hidden vs visible: the gateway's own tool work (reads, writes, handoffs) is kept in the PendingTurn, so the client only ever sees the visible conversation.</text>
+<text x="62" y="1001.5" font-size="12" font-weight="400" fill="#334155" text-anchor="start">Corrections, not crashes: a bad tool call goes back to the model as an error message (max 4 in a row). Tool results are cut at 20,000 characters.</text>
+<text x="62" y="1019.0" font-size="12" font-weight="400" fill="#334155" text-anchor="start">Writes are shown first. Handoffs reset the correction counter. The agent's own tool always replaces a client tool with the same job.</text>
+<text x="62" y="1036.5" font-size="12" font-weight="400" fill="#334155" text-anchor="start">Every step is narrated in one line ("Looked up the knowledge base (5 results)", "Handing off from X to Y") through the reasoning channel.</text>
+<rect x="1224" y="442" width="592" height="668" rx="18" fill="none" stroke="#cbd5e1" stroke-width="1.4" stroke-dasharray="3 6"/>
+<text x="1240" y="463" font-size="11.5" font-weight="700" fill="#64748b" text-anchor="start">D  HOW A TURN PAUSES AND RESUMES</text>
+<text x="1800" y="463" font-size="11.5" font-weight="400" fill="#94a3b8" text-anchor="end">the OpenAI API has no 'wait'</text>
+<rect x="1246" y="470" width="548" height="174" rx="12" fill="#ecfdf5" stroke="#059669" stroke-width="1.6"/>
+<text x="1260" y="494" font-size="14" font-weight="700" fill="#022c22" text-anchor="start">1  The pause</text>
+<text x="1260" y="511" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">a write needs approval, the agent asked a question, or a client tool must run</text>
+<text x="1262" y="531" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">PendingTurn(kind = approval | question | client_tool)</text>
+<text x="1262" y="548.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">   hidden messages + remaining calls + the call, ENCRYPTED</text>
+<text x="1262" y="566.0" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">   approval expires in 15 min; other pauses in 24 h</text>
+<text x="1262" y="583.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">the response ends with ONE of:</text>
+<text x="1262" y="601.0" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">   a call to the client's question tool (AskUserQuestion,</text>
+<text x="1262" y="618.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">   question, ask_user_question, clarify), or</text>
+<text x="1262" y="636.0" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">   plain text:  approve &lt;code&gt;  /  reject &lt;code&gt;</text>
+<rect x="1246" y="656" width="548" height="140" rx="12" fill="#ecfdf5" stroke="#059669" stroke-width="1.6"/>
+<text x="1260" y="680" font-size="14" font-weight="700" fill="#022c22" text-anchor="start">2  The code is bound to the call</text>
+<text x="1260" y="697" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">an HMAC under APPROVAL_SECRET, not a free-form token</text>
+<text x="1262" y="717" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">code = HMAC(user, call id, tool, hash of the arguments)</text>
+<text x="1262" y="734.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">   a code for one call cannot approve another, or</text>
+<text x="1262" y="752.0" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">   the same tool with different arguments</text>
+<text x="1262" y="769.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">stored as a hash; compared in constant time</text>
+<text x="1262" y="787.0" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">wrong, expired or reused -&gt; "Nothing was changed."</text>
+<rect x="1246" y="808" width="548" height="154" rx="12" fill="#ecfdf5" stroke="#059669" stroke-width="1.6"/>
+<text x="1260" y="832" font-size="14" font-weight="700" fill="#022c22" text-anchor="start">3  The resume</text>
+<text x="1260" y="849" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">the next request carries the user's answer</text>
+<text x="1262" y="869" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">history hash -&gt; the same thread (active agent, opt-in)</text>
+<text x="1262" y="886.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">last message = a tool result  -&gt; take_pending(call id)</text>
+<text x="1262" y="904.0" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">last message = 'approve &lt;code&gt;' -&gt; take_pending_by_code</text>
+<text x="1262" y="921.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">restore hidden messages and the queue, then dispatch:</text>
+<text x="1262" y="939.0" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">   approved -&gt; run the write      declined -&gt; tell the model</text>
+<text x="1262" y="956.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">a resumed turn never re-runs reads it already did</text>
+<rect x="1246" y="974" width="548" height="124" rx="12" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.6"/>
+<text x="1260" y="998" font-size="14" font-weight="700" fill="#2e1065" text-anchor="start">Why the thread is a hash</text>
+<text x="1260" y="1015" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">no thread id in the OpenAI API</text>
+<text x="1262" y="1035" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">history_hash = chain hash of the visible messages, per user.</text>
+<text x="1262" y="1052.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">Recognised by history, so a client that just replays its</text>
+<text x="1262" y="1070.0" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">messages lands on the same active agent. The hash also keys</text>
+<text x="1262" y="1087.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">the Redis lock: one turn at a time per conversation.</text>
+<rect x="24" y="1126" width="900" height="296" rx="18" fill="none" stroke="#cbd5e1" stroke-width="1.4" stroke-dasharray="3 6"/>
+<text x="40" y="1147" font-size="11.5" font-weight="700" fill="#64748b" text-anchor="start">E  WHO RUNS A TOOL CALL -- DECIDED PER TOOL, PER CALL</text>
+<text x="908" y="1147" font-size="11.5" font-weight="400" fill="#94a3b8" text-anchor="end">domain/toolroute.py</text>
+<rect x="46" y="1154" width="862" height="62" rx="12" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.6"/>
+<text x="60" y="1178" font-size="13.5" font-weight="700" fill="#2e1065" text-anchor="start">For each tool of each server the agent is bound to:  does the user have the credentials it declares?</text>
+<rect x="46" y="1228" width="420" height="178" rx="12" fill="#ecfeff" stroke="#0891b2" stroke-width="1.6"/>
+<text x="60" y="1252" font-size="15" font-weight="700" fill="#083344" text-anchor="start">Yes  -&gt;  route: gateway</text>
+<text x="60" y="1269" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">credentials = request headers  +  stored</text>
+<text x="62" y="1289" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">1  X-Agent-Skills-Env-&lt;VAR&gt; on this request</text>
+<text x="62" y="1306.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">2  stored with `make gateway-creds-set`</text>
+<text x="62" y="1324.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">   (Fernet, CREDS_KEY, per user + server)</text>
+<text x="62" y="1341.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">the tool is offered to the model, and any</text>
+<text x="62" y="1359.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">client tool doing the same job is hidden</text>
+<rect x="488" y="1228" width="420" height="178" rx="12" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.6"/>
+<text x="502" y="1252" font-size="15" font-weight="700" fill="#334155" text-anchor="start">No  -&gt;  route: unavailable</text>
+<text x="502" y="1269" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">the agent tells the user what is missing</text>
+<text x="504" y="1289" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">the tool is not offered; a client equivalent</text>
+<text x="504" y="1306.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">is held back too, and `use_client_tools` is</text>
+<text x="504" y="1324.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">offered instead. Only after the user says yes</text>
+<text x="504" y="1341.5" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">does route become: client -- the client's own</text>
+<text x="504" y="1359.0" font-size="12.5" font-weight="400" fill="#334155" text-anchor="start">connector runs it, gated by the client</text>
+<path d="M256 1216 L256 1228" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#ar)"/>
+<path d="M698 1216 L698 1228" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#ar)"/>
+<rect x="944" y="1126" width="872" height="296" rx="18" fill="none" stroke="#cbd5e1" stroke-width="1.4" stroke-dasharray="3 6"/>
+<text x="960" y="1147" font-size="11.5" font-weight="700" fill="#64748b" text-anchor="start">F  PORTS AND THE ADAPTERS BEHIND THEM</text>
+<text x="1800" y="1147" font-size="11.5" font-weight="400" fill="#94a3b8" text-anchor="end">application/ports.py: what the core needs from the outside</text>
+<rect x="966" y="1154" width="276" height="112" rx="12" fill="#fff1f2" stroke="#e11d48" stroke-width="1.6"/>
+<text x="980" y="1178" font-size="13.5" font-weight="700" fill="#4c0519" text-anchor="start">Llm</text>
+<text x="982" y="1198" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">upstream_llm.py</text>
+<text x="982" y="1215.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">httpx to the OpenAI-compatible</text>
+<text x="982" y="1233.0" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">endpoint; streams; 3 retries</text>
+<rect x="1250" y="1154" width="276" height="112" rx="12" fill="#ecfeff" stroke="#0891b2" stroke-width="1.6"/>
+<text x="1264" y="1178" font-size="13.5" font-weight="700" fill="#083344" text-anchor="start">ToolGateway</text>
+<text x="1266" y="1198" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">mcp_tools.py</text>
+<text x="1266" y="1215.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">FastMCP client; per-call</text>
+<text x="1266" y="1233.0" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">credential headers; kb + skills</text>
+<rect x="1534" y="1154" width="276" height="112" rx="12" fill="#ecfeff" stroke="#0891b2" stroke-width="1.6"/>
+<text x="1548" y="1178" font-size="13.5" font-weight="700" fill="#083344" text-anchor="start">Retriever</text>
+<text x="1550" y="1198" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">KbRetriever</text>
+<text x="1550" y="1215.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">kb_search; user's words sent</text>
+<text x="1550" y="1233.0" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">as both required fields</text>
+<rect x="966" y="1278" width="276" height="112" rx="12" fill="#ecfdf5" stroke="#059669" stroke-width="1.6"/>
+<text x="980" y="1302" font-size="13.5" font-weight="700" fill="#022c22" text-anchor="start">ConversationStore</text>
+<text x="982" y="1322" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">postgres_store.py</text>
+<text x="982" y="1339.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">threads, pending turns,</text>
+<text x="982" y="1357.0" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">responses; payloads encrypted</text>
+<rect x="1250" y="1278" width="276" height="112" rx="12" fill="#ecfdf5" stroke="#059669" stroke-width="1.6"/>
+<text x="1264" y="1302" font-size="13.5" font-weight="700" fill="#022c22" text-anchor="start">CredentialStore</text>
+<text x="1266" y="1322" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">postgres + crypto.py</text>
+<text x="1266" y="1339.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">Fernet under CREDS_KEY;</text>
+<text x="1266" y="1357.0" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">per user, server, variable</text>
+<rect x="1534" y="1278" width="276" height="112" rx="12" fill="#ecfdf5" stroke="#059669" stroke-width="1.6"/>
+<text x="1548" y="1302" font-size="13.5" font-weight="700" fill="#022c22" text-anchor="start">Lock / RateLimiter</text>
+<text x="1550" y="1322" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">redis_locks.py</text>
+<text x="1550" y="1339.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">per-conversation lock; per-key</text>
+<text x="1550" y="1357.0" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">counter (memory fallback in tests)</text>
+<text x="1380" y="1411" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="middle" font-style="italic">swap an adapter by implementing its Protocol; the turn engine does not change</text>
+<rect x="24" y="1438" width="1100" height="142" rx="18" fill="none" stroke="#cbd5e1" stroke-width="1.4" stroke-dasharray="3 6"/>
+<text x="40" y="1459" font-size="11.5" font-weight="700" fill="#64748b" text-anchor="start">G  DOMAIN -- PURE RULES, NO I/O</text>
+<text x="1108" y="1459" font-size="11.5" font-weight="400" fill="#94a3b8" text-anchor="end">enforced by tests/test_boundaries.py</text>
+<rect x="46" y="1466" width="118" height="94" rx="9" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.2"/>
+<text x="105.0" y="1486" font-size="12" font-weight="700" fill="#2e1065" text-anchor="middle">agent</text>
+<text x="105.0" y="1506" font-size="10.6" font-weight="400" fill="#475569" text-anchor="middle">id, tools, handoffs,</text>
+<text x="105.0" y="1521" font-size="10.6" font-weight="400" fill="#475569" text-anchor="middle">prompt, preretrieval</text>
+<rect x="168" y="1466" width="118" height="94" rx="9" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.2"/>
+<text x="227.0" y="1486" font-size="12" font-weight="700" fill="#2e1065" text-anchor="middle">routing</text>
+<text x="227.0" y="1506" font-size="10.6" font-weight="400" fill="#475569" text-anchor="middle">model name -&gt;</text>
+<text x="227.0" y="1521" font-size="10.6" font-weight="400" fill="#475569" text-anchor="middle">agent / passthrough</text>
+<rect x="290" y="1466" width="118" height="94" rx="9" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.2"/>
+<text x="349.0" y="1486" font-size="12" font-weight="700" fill="#2e1065" text-anchor="middle">toolroute</text>
+<text x="349.0" y="1506" font-size="10.6" font-weight="400" fill="#475569" text-anchor="middle">gateway | client |</text>
+<text x="349.0" y="1521" font-size="10.6" font-weight="400" fill="#475569" text-anchor="middle">unavailable</text>
+<rect x="412" y="1466" width="118" height="94" rx="9" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.2"/>
+<text x="471.0" y="1486" font-size="12" font-weight="700" fill="#2e1065" text-anchor="middle">approval</text>
+<text x="471.0" y="1506" font-size="10.6" font-weight="400" fill="#475569" text-anchor="middle">HMAC codes,</text>
+<text x="471.0" y="1521" font-size="10.6" font-weight="400" fill="#475569" text-anchor="middle">approve/reject parse</text>
+<rect x="534" y="1466" width="118" height="94" rx="9" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.2"/>
+<text x="593.0" y="1486" font-size="12" font-weight="700" fill="#2e1065" text-anchor="middle">corrections</text>
+<text x="593.0" y="1506" font-size="10.6" font-weight="400" fill="#475569" text-anchor="middle">messages sent back</text>
+<text x="593.0" y="1521" font-size="10.6" font-weight="400" fill="#475569" text-anchor="middle">to a bad tool call</text>
+<rect x="656" y="1466" width="118" height="94" rx="9" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.2"/>
+<text x="715.0" y="1486" font-size="12" font-weight="700" fill="#2e1065" text-anchor="middle">history</text>
+<text x="715.0" y="1506" font-size="10.6" font-weight="400" fill="#475569" text-anchor="middle">chain hash, lookup</text>
+<text x="715.0" y="1521" font-size="10.6" font-weight="400" fill="#475569" text-anchor="middle">hash</text>
+<rect x="778" y="1466" width="118" height="94" rx="9" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.2"/>
+<text x="837.0" y="1486" font-size="12" font-weight="700" fill="#2e1065" text-anchor="middle">prompt</text>
+<text x="837.0" y="1506" font-size="10.6" font-weight="400" fill="#475569" text-anchor="middle">compose, condense</text>
+<text x="837.0" y="1521" font-size="10.6" font-weight="400" fill="#475569" text-anchor="middle">client prompts</text>
+<rect x="900" y="1466" width="118" height="94" rx="9" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.2"/>
+<text x="959.0" y="1486" font-size="12" font-weight="700" fill="#2e1065" text-anchor="middle">interaction</text>
+<text x="959.0" y="1506" font-size="10.6" font-weight="400" fill="#475569" text-anchor="middle">client question-tool</text>
+<text x="959.0" y="1521" font-size="10.6" font-weight="400" fill="#475569" text-anchor="middle">styles</text>
+<rect x="1022" y="1466" width="118" height="94" rx="9" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.2"/>
+<text x="1081.0" y="1486" font-size="12" font-weight="700" fill="#2e1065" text-anchor="middle">params</text>
+<text x="1081.0" y="1506" font-size="10.6" font-weight="400" fill="#475569" text-anchor="middle">locked / tunable</text>
+<text x="1081.0" y="1521" font-size="10.6" font-weight="400" fill="#475569" text-anchor="middle">parameters</text>
+<rect x="1144" y="1438" width="672" height="142" rx="18" fill="none" stroke="#cbd5e1" stroke-width="1.4" stroke-dasharray="3 6"/>
+<text x="1160" y="1459" font-size="11.5" font-weight="700" fill="#64748b" text-anchor="start">H  WHAT IT STANDS ON</text>
+<text x="1800" y="1459" font-size="11.5" font-weight="400" fill="#94a3b8" text-anchor="end">2 stores + 3 neighbours</text>
+<rect x="1166" y="1466" width="150" height="94" rx="12" fill="#ecfdf5" stroke="#059669" stroke-width="1.6"/>
+<text x="1180" y="1490" font-size="13" font-weight="700" fill="#022c22" text-anchor="start">gateway-db</text>
+<text x="1182" y="1510" font-size="10.8" font-weight="400" fill="#334155" text-anchor="start">api_keys, user_creds,</text>
+<text x="1182" y="1527.5" font-size="10.8" font-weight="400" fill="#334155" text-anchor="start">threads, pending_turns,</text>
+<text x="1182" y="1545.0" font-size="10.8" font-weight="400" fill="#334155" text-anchor="start">pending_calls, responses</text>
+<rect x="1326" y="1466" width="120" height="94" rx="12" fill="#ecfdf5" stroke="#059669" stroke-width="1.6"/>
+<text x="1340" y="1490" font-size="13" font-weight="700" fill="#022c22" text-anchor="start">gateway-redis</text>
+<text x="1342" y="1510" font-size="10.8" font-weight="400" fill="#334155" text-anchor="start">locks, rate</text>
+<text x="1342" y="1527.5" font-size="10.8" font-weight="400" fill="#334155" text-anchor="start">counters</text>
+<rect x="1456" y="1466" width="110" height="94" rx="12" fill="#fff1f2" stroke="#e11d48" stroke-width="1.6"/>
+<text x="1470" y="1490" font-size="13" font-weight="700" fill="#4c0519" text-anchor="start">Upstream</text>
+<text x="1472" y="1510" font-size="10.8" font-weight="400" fill="#334155" text-anchor="start">LLM</text>
+<rect x="1576" y="1466" width="100" height="94" rx="12" fill="#ecfeff" stroke="#0891b2" stroke-width="1.6"/>
+<text x="1590" y="1490" font-size="13" font-weight="700" fill="#083344" text-anchor="start">mcp-kb</text>
+<text x="1592" y="1510" font-size="10.8" font-weight="400" fill="#334155" text-anchor="start">catalog</text>
+<rect x="1686" y="1466" width="110" height="94" rx="12" fill="#ecfeff" stroke="#0891b2" stroke-width="1.6"/>
+<text x="1700" y="1490" font-size="13" font-weight="700" fill="#083344" text-anchor="start">skills</text>
+<text x="1702" y="1510" font-size="10.8" font-weight="400" fill="#334155" text-anchor="start">Jira, Confluence,</text>
+<text x="1702" y="1527.5" font-size="10.8" font-weight="400" fill="#334155" text-anchor="start">GitLab</text>
+<rect x="24" y="1596" width="1792" height="164" rx="18" fill="none" stroke="#cbd5e1" stroke-width="1.4" stroke-dasharray="3 6"/>
+<text x="40" y="1617" font-size="11.5" font-weight="700" fill="#64748b" text-anchor="start">I  CONFIGURATION -- FILES, NOT CODE</text>
+<text x="1800" y="1617" font-size="11.5" font-weight="400" fill="#94a3b8" text-anchor="end">mounted read-only into the container at /etc/agent-gateway</text>
+<rect x="46" y="1624" width="560" height="124" rx="12" fill="#fffbeb" stroke="#d97706" stroke-width="1.6"/>
+<text x="60" y="1648" font-size="13.5" font-weight="700" fill="#451a03" text-anchor="start">config/agents/*.yaml  --  one file, one model name</text>
+<text x="62" y="1668" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">id, name, model, model_parameters, locked_parameters,</text>
+<text x="62" y="1685.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">client_system (append|prepend|ignore), client_tools,</text>
+<text x="62" y="1703.0" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">instructions, tools: [{server, include, approval}],</text>
+<text x="62" y="1720.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">handoffs: [{to, description}], interaction, preretrieval.kb</text>
+<rect x="626" y="1624" width="560" height="124" rx="12" fill="#fffbeb" stroke="#d97706" stroke-width="1.6"/>
+<text x="640" y="1648" font-size="13.5" font-weight="700" fill="#451a03" text-anchor="start">config/mcp-servers.yaml  --  one entry, one tool server</text>
+<text x="642" y="1668" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">url, timeout, header_prefix (X-Agent-Skills-Env-),</text>
+<text x="642" y="1685.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">client_terms (words that mark a client stand-in),</text>
+<text x="642" y="1703.0" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">credentials: the variable NAMES it accepts -- never values</text>
+<rect x="1206" y="1624" width="590" height="124" rx="12" fill="#fffbeb" stroke="#d97706" stroke-width="1.6"/>
+<text x="1220" y="1648" font-size="13.5" font-weight="700" fill="#451a03" text-anchor="start">config/gateway.yaml  --  limits and shape</text>
+<text x="1222" y="1668" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">max_steps 25 | max_corrections 4 | requests_per_minute 120</text>
+<text x="1222" y="1685.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">approval_ttl 900 s | pending_ttl 24 h | thread_retention 30 d</text>
+<text x="1222" y="1703.0" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">tool_result_chars 20000 | client_prompt_limit 6000 -&gt; 2500</text>
+<text x="1222" y="1720.5" font-size="11.8" font-weight="400" fill="#334155" text-anchor="start">retrieval: server + tool | context windows | ask_tools styles</text>
+</svg>

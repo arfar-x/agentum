@@ -256,6 +256,38 @@ Redis holds locks so one thread runs one turn at a time.
 the tools it may use, the agents it may hand off to. Tool servers are YAML in
 `config/mcp-servers.yaml` and list the credential variable *names* they accept, never values.
 
+### Underneath
+
+![agent-gateway internals](agent-gateway.svg)
+
+The gateway is hexagonal: `domain/` holds pure rules (agent definitions, routing, tool routing,
+approval codes, corrections, history hashing), `application/` holds the turn engine, and
+`adapters/` talks to the outside world (HTTP in; Postgres, Redis, MCP and the model out). A test
+fails if `domain/` or `application/` import anything that does I/O, so an adapter can be swapped by
+implementing its protocol in `application/ports.py`.
+
+- **A request is a whole conversation.** The OpenAI API is stateless, so the client replays the
+  full history every time. The gateway recognises a conversation by a chain hash of the visible
+  messages (per user), which is how it remembers the active agent and whether the user opted in to
+  their client's own tools. The same hash keys a Redis lock, so a conversation runs one turn at a
+  time.
+- **A turn is four nodes**, run by LangGraph but decided entirely in `application/turn.py`:
+  `prepare` (restore state, condense a long client prompt, pre-retrieve from `kb`), `model` (build
+  this call's toolset, call the upstream model), `dispatch` (route each tool call: handoff, client
+  tool, question, gateway read, gateway write), and `finish`. Tool results loop back to `model`
+  until it answers. A bad tool call (unknown tool, invalid JSON, schema violation) goes back to the
+  model as an error message, up to 4 times in a row, instead of failing the turn.
+- **A pause is a stored turn.** When a write needs approval, the agent asks a question, or a client
+  tool must run, the gateway stores a `PendingTurn` (encrypted: the hidden work, the remaining
+  calls, the call itself) and ends the response with the question. The approval code is an HMAC
+  over the user, call id, tool and argument hash, so it approves exactly one call and nothing
+  else. The next request carries the answer; `prepare` takes the pending turn, restores it and
+  jumps straight to `dispatch`. Approvals expire after 15 minutes; other pauses after 24 hours.
+- **Who runs a tool is decided per call.** If the user has the credentials a tool's server declares
+  (request headers first, then stored), the gateway runs it and hides any client tool with the same
+  job. If not, the tool is not offered, the agent says what is missing, and the client's own
+  equivalent stays held back until the user opts in.
+
 ## Trust boundaries
 
 Access control here is mostly **network reachability**, because MCP's HTTP transport has no auth of
