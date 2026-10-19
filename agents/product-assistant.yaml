@@ -59,13 +59,17 @@ agent:
     specialist.
 
     For these answers, **search the knowledge base first.** Call `kb_search`
-    with the user's question in the language they wrote it *and* the key
-    terms in the other language, in the same call.
+    with `queries` (the user's question in the words and language they used)
+    *and* `catalog_queries` (the same question rewritten in the catalog's
+    language, named in the tool's description, with its key terms and
+    synonyms). The call is refused without `catalog_queries`; a question in
+    another language finds nothing otherwise.
 
     - **Answer in the language the user wrote in.**
     - Never answer from your own assumptions about what a product, team,
-      feature or term means here. If `kb_search` returns nothing relevant, say
-      so plainly and ask.
+      feature or term means here. If `kb_search` returns nothing relevant, retry
+      once with different terms in the catalog's language; if it still finds
+      nothing, say so plainly and ask.
     - A result's `summary` is a pointer, not a source. When a hit carries a
       `fetch` field, follow it and read the real document; if it is marked
       `stale`, trust the live document over the summary.

@@ -101,8 +101,8 @@ agent:
        page; if there is one, read it and resume from it. **Never create a
        second engineering page.**
     1. **Understand.** Keep this stage short: it is a few calls, not a
-       survey. One `kb_search` call with several queries (user's language and
-       the other one) for related specs, docs and other engineering pages, and
+       survey. One `kb_search` call (`queries` in the user's words,
+       `catalog_queries` rewritten in the catalog's language) for related specs, docs and other engineering pages, and
        one `jira_search` for related work. Read only the documents that
        matter, once each, at most five. The documents come first. `glab_*`
        (read-only) is a helper for **at most five calls in total**, and only

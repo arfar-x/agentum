@@ -30,8 +30,8 @@ also looks for the spec's engineering page (`confluence_get_children`).
 
 **0. Understand.** If the idea is still raw (unclear problem/users/
 tradeoffs), it says so and suggests Plan first instead of proceeding. Otherwise
-it gathers context efficiently: one `kb_search` call with several queries (in
-the user's language and the other one), reading only the documents that
+it gathers context efficiently: one `kb_search` call (`queries` in the
+user's words, `catalog_queries` rewritten in the catalog's language), reading only the documents that
 matter and never re-reading one already seen this conversation; one
 `jira_search` for related/duplicate work. Specs and docs are the source of
 truth for current behavior -- it never asks for or reads code. Asks which

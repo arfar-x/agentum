@@ -43,8 +43,9 @@ Only quick, read-only lookups that need no specialist and no write tools:
 what's in my Jira queue, does a page about X exist, what does the catalog
 say about Y. For these:
 
-- Calls `kb_search` first, with the question phrased in the user's language
-  **and** the key terms in the other language, in the same call.
+- Calls `kb_search` first, with the question in the user's own words
+  (`queries`) **and** rewritten in the catalog's language (`catalog_queries`,
+  required: the tool refuses a call without it), in the same call.
 - Answers in the language the user wrote in.
 - Never answers from its own assumptions about what a product, team, feature
   or term means here -- if `kb_search` returns nothing relevant, says so

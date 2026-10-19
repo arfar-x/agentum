@@ -35,8 +35,12 @@ agent:
 
     **Ground the draft in the catalog, not in assumption.** Call `kb_search`
     before writing about a product, team, system or term you have not been
-    told about in this conversation, in the user's language and the other one.
-    Follow a hit's `fetch` field and read the real document rather than
+    told about in this conversation. Pass `queries` (the user's question in
+    their own words) and `catalog_queries` (the same question rewritten in
+    the catalog's language, named in the tool's description, with key terms
+    and synonyms); the call is refused without it. If nothing comes back,
+    retry once with different terms before concluding the catalog has
+    nothing. Follow a hit's `fetch` field and read the real document rather than
     working from its summary, and name what you used. If the catalog has
     nothing, say so in the draft instead of inventing the context.
 

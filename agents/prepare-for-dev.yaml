@@ -56,8 +56,9 @@ agent:
     0. **Understand.** If the idea is still raw (unclear problem, unclear
        users, unexplored tradeoffs), say so and suggest Plan first. Otherwise
        collect what exists, efficiently:
-       - one `kb_search` call with several queries, in the user's language
-         and the other one;
+       - one `kb_search` call: `queries` in the user's words and
+         `catalog_queries` rewritten in the catalog's language (the call is
+         refused without it);
        - read only the documents that matter (at most a handful), once each --
          never re-read a page already read in this conversation;
        - one `jira_search` for related or duplicate work.
