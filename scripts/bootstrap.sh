@@ -36,8 +36,15 @@ kb/scripts/prepare.sh
 
 scripts/render-librechat-config.sh
 
-echo "==> docker compose up -d --build"
-docker compose up -d --build
+# The agent gateway sits behind the `gateway` profile; it comes up with the rest
+# as soon as its env file exists, so a reboot doesn't leave its connection dead.
+profile=()
+if [ -f .env.agent-gateway ]; then
+  profile=(--profile gateway)
+fi
+
+echo "==> docker compose ${profile[*]:-} up -d --build"
+docker compose "${profile[@]}" up -d --build
 
 echo "==> Waiting for api to report healthy..."
 for _ in $(seq 1 60); do
