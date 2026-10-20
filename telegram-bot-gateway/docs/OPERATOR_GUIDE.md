@@ -41,7 +41,7 @@ may lock some) says so and the message is shown unchanged.
 
 | Variable | Effect |
 |---|---|
-| `REACTIONS` | 👀 / 👍 / 👎 on the message being answered (default on). |
+| `REACTIONS` | 👀 / 👍 / 👎 on the message being answered (default off; the typing indicator is enough). |
 | `SHOW_PROGRESS` | Show the endpoint's reasoning as one silent message, edited in place and removed after the answer (default off). |
 | `REQUEST_TIMEOUT` | Seconds before a request to the endpoint is abandoned. |
 | `WEBHOOK_URL`, `WEBHOOK_SECRET` | Webhook instead of long polling; the secret is mandatory with the URL. The bot publishes no port, so put your own listener in front. |

@@ -17,6 +17,7 @@ from telegram_bot_gateway.application.model import Session
 from telegram_bot_gateway.application.ports import Llm, Store, Vault
 from telegram_bot_gateway.config import Settings
 from telegram_bot_gateway.domain.content import Item, merge
+from telegram_bot_gateway.domain.prompt import telegram_context
 
 log = logging.getLogger(__name__)
 
@@ -131,6 +132,7 @@ class Runtime:
             outcome = await turn.run(
                 work, self._llm, api_key, default_model=self._cfg.default_model, chat_id=target.chat_id,
                 now=time.time(), on_reasoning=progress.update if progress else None,
+                system=telegram_context(target.chat_type),
             )
         except asyncio.CancelledError:
             await asyncio.shield(self._react(target, None))

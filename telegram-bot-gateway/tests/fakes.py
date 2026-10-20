@@ -67,7 +67,10 @@ class ScriptedLlm:
         self.calls: list[dict[str, Any]] = []
 
     async def chat(self, api_key, model, messages, params, tools, on_reasoning=None):
-        self.calls.append({"api_key": api_key, "model": model, "messages": copy.deepcopy(messages), "params": params, "tools": tools})
+        system = messages[0]["content"] if messages and messages[0]["role"] == "system" else None
+        body = messages[1:] if system is not None else messages
+        self.calls.append({"api_key": api_key, "model": model, "messages": copy.deepcopy(body), "system": system,
+                           "params": params, "tools": tools})
         step = self.script.pop(0) if self.script else {"role": "assistant", "content": "ok"}
         if callable(step):
             step = await step()

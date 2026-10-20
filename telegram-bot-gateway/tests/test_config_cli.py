@@ -15,9 +15,9 @@ ENV = {"BOT_TOKEN": "t", "OPENAI_BASE_URL": "http://x/v1", "DEFAULT_MODEL": "m",
 
 def test_settings_read_the_documented_variables_with_defaults():
     s = Settings.from_env(ENV)
-    assert (s.reactions, s.show_progress, s.request_timeout, s.webhook_url) == (True, False, 600.0, "")
-    s = Settings.from_env({**ENV, "REACTIONS": "false", "SHOW_PROGRESS": "1", "REQUEST_TIMEOUT": "30", "OPENAI_API_KEY": "sk"})
-    assert (s.reactions, s.show_progress, s.request_timeout, s.openai_api_key) == (False, True, 30.0, "sk")
+    assert (s.reactions, s.show_progress, s.request_timeout, s.webhook_url) == (False, False, 600.0, "")
+    s = Settings.from_env({**ENV, "REACTIONS": "true", "SHOW_PROGRESS": "1", "REQUEST_TIMEOUT": "30", "OPENAI_API_KEY": "sk"})
+    assert (s.reactions, s.show_progress, s.request_timeout, s.openai_api_key) == (True, True, 30.0, "sk")
 
 
 def test_a_missing_variable_is_named():

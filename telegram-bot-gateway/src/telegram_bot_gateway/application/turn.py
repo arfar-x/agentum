@@ -66,12 +66,17 @@ async def run(
     chat_id: int,
     now: float,
     on_reasoning: ReasoningSink | None = None,
+    system: str | None = None,
 ) -> Outcome:
-    """Call the endpoint until it answers or asks. ``work`` is changed; the caller saves it on success."""
+    """Call the endpoint until it answers or asks. ``work`` is changed; the caller saves it on success.
+
+    ``system`` is sent first on every call and never stored, so it can change without touching history.
+    """
     params = dict(work.params)
     notices: list[str] = []
     for _ in range(MAX_ROUNDS):
-        message = await llm.chat(api_key, work.model or default_model, work.messages, params, [clarify.TOOL], on_reasoning)
+        sent = [{"role": "system", "content": system}, *work.messages] if system else work.messages
+        message = await llm.chat(api_key, work.model or default_model, sent, params, [clarify.TOOL], on_reasoning)
         work.messages.append(message)
         calls = message.get("tool_calls") or []
         if not calls:

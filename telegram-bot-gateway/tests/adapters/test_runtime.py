@@ -10,7 +10,7 @@ from telegram_bot_gateway.config import Settings
 from telegram_bot_gateway.domain.content import Item
 from tests.fakes import FakeBot, FakeStore, FakeVault, ScriptedLlm, call, say, settle
 
-# Covers: FR-TRN-03, FR-TRN-04, FR-TRN-05, FR-TRN-06, FR-OUT-01, FR-OUT-02, FR-OUT-09, FR-OUT-11
+# Covers: FR-TRN-08, FR-TRN-03, FR-TRN-04, FR-TRN-05, FR-TRN-06, FR-OUT-01, FR-OUT-02, FR-OUT-09, FR-OUT-11
 # Covers: FR-INB-13, FR-INB-08, FR-ASK-02, FR-ASK-04, FR-LNK-01
 
 
@@ -41,7 +41,7 @@ async def test_an_answer_is_sent_with_reactions_and_typing():
         return say("hello.")
 
     llm = ScriptedLlm(a_moment)
-    bot, store, rt = await make(llm)
+    bot, store, rt = await make(llm, reactions=True)
     rt.submit(job())
     await settle(lambda: bot.sent and bot.reactions and bot.reactions[-1][1] == ["👍"])
     assert texts(bot) == [r"hello\."]
@@ -50,11 +50,29 @@ async def test_an_answer_is_sent_with_reactions_and_typing():
     assert [m["role"] for m in store.sessions["5"].messages] == ["user", "assistant"]
 
 
-async def test_reactions_can_be_switched_off():
-    bot, _, rt = await make(ScriptedLlm(say("x")), reactions=False)
+async def test_there_are_no_reactions_by_default():
+    bot, _, rt = await make(ScriptedLlm(say("x")))
     rt.submit(job())
     await settle(lambda: bot.sent)
     assert bot.reactions == []
+
+
+async def test_every_request_starts_with_the_telegram_system_note_which_is_not_stored():
+    llm = ScriptedLlm(say("a"), say("b"))
+    bot, store, rt = await make(llm)
+    rt.submit(job(text="one"))
+    await settle(lambda: len(bot.sent) == 1)
+    rt.submit(job(text="two", msg_id=11))
+    await settle(lambda: len(bot.sent) == 2)
+    for sent in llm.calls:
+        assert "Telegram" in sent["system"] and "short" in sent["system"]
+        assert not any(m["role"] == "system" for m in sent["messages"])
+    assert not any(m["role"] == "system" for m in store.sessions["5"].messages)
+
+
+async def test_the_note_is_shorter_for_groups():
+    from telegram_bot_gateway.domain.prompt import telegram_context
+    assert "group chat" in telegram_context("supergroup") and "group chat" not in telegram_context("private")
 
 
 async def test_messages_arriving_together_become_one_turn():
@@ -118,7 +136,7 @@ async def test_stop_cancels_the_request_clears_the_reaction_and_saves_nothing():
         await asyncio.sleep(60)
 
     llm = ScriptedLlm(hang)
-    bot, store, rt = await make(llm)
+    bot, store, rt = await make(llm, reactions=True)
     rt.submit(job())
     await settle(lambda: rt.busy("5") and llm.calls)
     rt.submit(job(text="queued", msg_id=11, delay=0.01))
@@ -132,7 +150,7 @@ async def test_stop_cancels_the_request_clears_the_reaction_and_saves_nothing():
 
 async def test_an_endpoint_error_is_shown_and_history_is_unchanged():
     llm = ScriptedLlm(EndpointError("The endpoint answered 400: bad temperature"))
-    bot, store, rt = await make(llm)
+    bot, store, rt = await make(llm, reactions=True)
     rt.submit(job())
     await settle(lambda: bot.sent)
     assert "bad temperature" in texts(bot)[0] and bot.reactions[-1][1] == ["👎"]
@@ -140,7 +158,7 @@ async def test_an_endpoint_error_is_shown_and_history_is_unchanged():
 
 
 async def test_an_empty_answer_sends_nothing_and_is_not_a_failure():
-    bot, _, rt = await make(ScriptedLlm(say("")))
+    bot, _, rt = await make(ScriptedLlm(say("")), reactions=True)
     rt.submit(job())
     await settle(lambda: bot.reactions and bot.reactions[-1][1] == ["👍"])
     assert bot.sent == []
