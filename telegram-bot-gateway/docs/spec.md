@@ -109,7 +109,7 @@ A Telegram bot that is a client of any OpenAI-compatible Chat Completions endpoi
 | FR-TRN-05 | Different sessions MUST run concurrently; turns of one session MUST run in order. | done |
 | FR-TRN-06 | An endpoint error MUST be shown to the user with its message, and the history MUST stay as it was before the turn. | done |
 | FR-TRN-07 | A request MUST NOT outlive a configurable timeout (default 10 minutes). | done |
-| FR-TRN-08 | Every request MUST begin with a system message telling the model it is talking in Telegram: keep answers short unless asked, use only Telegram-friendly Markdown and a few emojis, reply in the user's language, and shorter still in a group. The message MUST NOT be stored in the history. | done |
+| FR-TRN-08 | Every request MUST begin with a system message telling the model it is talking in Telegram: keep answers short unless asked, use only Telegram-friendly Markdown and a few emojis, do not name the sources of an answer unless asked, reply in the user's language, and shorter still in a group. The message MUST NOT be stored in the history. | done |
 
 ### 5.5 Outgoing messages — `FR-OUT`
 

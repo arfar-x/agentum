@@ -79,6 +79,7 @@ async def test_every_request_starts_with_the_telegram_system_note_which_is_not_s
     await settle(lambda: len(bot.sent) == 2)
     for sent in llm.calls:
         assert "Telegram" in sent["system"] and "short" in sent["system"]
+        assert "Do not mention which documents or sources" in sent["system"]
         assert not any(m["role"] == "system" for m in sent["messages"])
     assert not any(m["role"] == "system" for m in store.sessions["5"].messages)
 
