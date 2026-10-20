@@ -80,7 +80,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
         if args.command == "serve":
+            import logging
+
             from telegram_bot_gateway.adapters.inbound.telegram.serve import serve
+
+            logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+            for noisy in ("httpx", "httpcore"):  # their request lines contain the bot token
+                logging.getLogger(noisy).setLevel(logging.WARNING)
 
             serve(Settings.from_env())
             return 0
