@@ -60,6 +60,7 @@ class Runtime:
         self._sender, self._cfg = sender, config
         self._buckets: dict[str, _Bucket] = {}
         self._runs: dict[str, _Run] = {}
+        self._marked: dict[tuple[int, int], Target] = {}  # messages carrying our 👀
 
     # -- intake --------------------------------------------------------------------------------
     def submit(self, job: Job) -> None:
@@ -77,6 +78,8 @@ class Runtime:
         run = self._runs.get(key)
         if run is not None:
             run.queue.extend(bucket.jobs)  # busy: merged into the next turn
+            for queued in bucket.jobs:
+                asyncio.create_task(self._mark(queued.target))  # it waits: say it was seen
             return
         run = self._runs[key] = _Run()
         run.task = asyncio.create_task(self._drain(key, run, bucket.jobs))
@@ -99,9 +102,12 @@ class Runtime:
         bucket = self._buckets.pop(key, None)
         if bucket and bucket.timer:
             bucket.timer.cancel()
+        if bucket:
+            await self._unmark([j.target for j in bucket.jobs])
         run = self._runs.get(key)
         if run is None or run.task is None:
             return bool(bucket and bucket.jobs)
+        await self._unmark([j.target for j in run.queue])
         run.queue.clear()
         run.task.cancel()
         try:
@@ -127,7 +133,7 @@ class Runtime:
             await self._safely(self._sender.edit(stale.chat_id, stale.card_message_id, f"{stale.question}\n\n⌛ Expired"))
         typing = asyncio.create_task(self._typing(target))
         progress = _Progress(self._sender, target) if self._cfg.show_progress else None
-        await self._react(target, "👀")
+        slow = asyncio.create_task(self._mark_if_slow(target))
         try:
             outcome = await turn.run(
                 work, self._llm, api_key, default_model=self._cfg.default_model, chat_id=target.chat_id,
@@ -135,18 +141,20 @@ class Runtime:
                 system=telegram_context(target.chat_type),
             )
         except asyncio.CancelledError:
-            await asyncio.shield(self._react(target, None))
+            slow.cancel()
+            await asyncio.shield(self._unmark([j.target for j in jobs] + [target]))
             raise
         except EndpointError as exc:
-            await self._react(target, "👎")
             await self._sender.send(target, str(exc))
+            await self._unmark([j.target for j in jobs])
             return
         except Exception:
             log.exception("endpoint call failed")
-            await self._react(target, "👎")
             await self._sender.send(target, "Something went wrong while answering. Please try again.")
+            await self._unmark([j.target for j in jobs])
             return
         finally:
+            slow.cancel()
             typing.cancel()
             if progress:
                 await progress.finish()
@@ -166,7 +174,7 @@ class Runtime:
             )
             work.pending.card_message_id = ids[0]
             await self._store.save_session(work)
-        await self._react(target, "👍")
+        await self._unmark([j.target for j in jobs])
 
     # -- chrome --------------------------------------------------------------------------------
     async def _typing(self, target: Target) -> None:
@@ -179,6 +187,22 @@ class Runtime:
             except Exception:  # a failed typing action must never fail the turn
                 pass
             await asyncio.sleep(2)
+
+    async def _mark_if_slow(self, target: Target) -> None:
+        """A turn that takes a while gets a 👀 so the user knows the message arrived."""
+        await asyncio.sleep(self._cfg.reaction_delay)
+        await self._mark(target)
+
+    async def _mark(self, target: Target) -> None:
+        if not self._cfg.reactions or target.reply_to is None:
+            return
+        self._marked[(target.chat_id, target.reply_to)] = target
+        await self._react(target, "👀")
+
+    async def _unmark(self, targets: list[Target]) -> None:
+        for target in targets:
+            if self._marked.pop((target.chat_id, target.reply_to), None) is not None:
+                await self._react(target, None)
 
     async def _react(self, target: Target, emoji: str | None) -> None:
         if not self._cfg.reactions or target.reply_to is None:

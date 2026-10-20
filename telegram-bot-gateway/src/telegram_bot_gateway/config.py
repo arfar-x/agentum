@@ -23,7 +23,8 @@ class Settings:
     database_url: str
     creds_key: str
     openai_api_key: str = ""
-    reactions: bool = False
+    reactions: bool = True
+    reaction_delay: float = 10.0
     show_progress: bool = False
     request_timeout: float = 600.0
     webhook_url: str = ""
@@ -49,7 +50,8 @@ class Settings:
             database_url=env["DATABASE_URL"],
             creds_key=env["CREDS_KEY"],
             openai_api_key=env.get("OPENAI_API_KEY", ""),
-            reactions=_flag(env.get("REACTIONS"), False),
+            reactions=_flag(env.get("REACTIONS"), True),
+            reaction_delay=float(env.get("REACTION_DELAY") or 10),
             show_progress=_flag(env.get("SHOW_PROGRESS"), False),
             request_timeout=float(env.get("REQUEST_TIMEOUT") or 600),
             webhook_url=webhook_url,

@@ -35,27 +35,40 @@ def texts(bot):
     return [m["text"] for m in bot.sent]
 
 
-async def test_an_answer_is_sent_with_reactions_and_typing():
+async def test_a_prompt_answer_gets_typing_but_no_reaction():
     async def a_moment():
         await asyncio.sleep(0.05)
         return say("hello.")
 
     llm = ScriptedLlm(a_moment)
-    bot, store, rt = await make(llm, reactions=True)
+    bot, store, rt = await make(llm, reactions=True, reaction_delay=5)
     rt.submit(job())
-    await settle(lambda: bot.sent and bot.reactions and bot.reactions[-1][1] == ["👍"])
-    assert texts(bot) == [r"hello\."]
-    assert [r[1] for r in bot.reactions] == [["👀"], ["👍"]] and bot.actions
+    await settle(lambda: bot.sent)
+    assert texts(bot) == [r"hello\."] and bot.actions and bot.reactions == []
     assert llm.calls[0]["api_key"] == "key5"
     assert [m["role"] for m in store.sessions["5"].messages] == ["user", "assistant"]
 
 
-async def test_there_are_no_reactions_by_default():
-    bot, _, rt = await make(ScriptedLlm(say("x")))
+async def test_a_slow_turn_gets_a_look_that_is_removed_when_answered():
+    async def slow():
+        await asyncio.sleep(0.2)
+        return say("finally")
+
+    bot, _, rt = await make(ScriptedLlm(slow), reactions=True, reaction_delay=0.05)
+    rt.submit(job())
+    await settle(lambda: bot.sent)
+    await settle(lambda: len(bot.reactions) == 2)
+    assert [r[1] for r in bot.reactions] == [["👀"], []]
+
+async def test_reactions_can_be_switched_off():
+    async def slow():
+        await asyncio.sleep(0.15)
+        return say("x")
+
+    bot, _, rt = await make(ScriptedLlm(slow), reactions=False, reaction_delay=0.01)
     rt.submit(job())
     await settle(lambda: bot.sent)
     assert bot.reactions == []
-
 
 async def test_every_request_starts_with_the_telegram_system_note_which_is_not_stored():
     llm = ScriptedLlm(say("a"), say("b"))
@@ -101,15 +114,16 @@ async def test_messages_during_a_turn_queue_and_merge_into_the_next():
         return say("first")
 
     llm = ScriptedLlm(slow, say("second"))
-    bot, store, rt = await make(llm)
+    bot, store, rt = await make(llm, reactions=True, reaction_delay=60)
     rt.submit(job(text="q1"))
     await settle(lambda: rt.busy("5") and llm.calls)
     rt.submit(job(text="q2", msg_id=11))
     rt.submit(job(text="q3", msg_id=12))
-    await asyncio.sleep(0.1)
+    await settle(lambda: sorted(r[0] for r in bot.reactions if r[1] == ["👀"]) == [11, 12])  # waiting: seen
     assert len(llm.calls) == 1  # still waiting; nothing was interrupted
     gate.set()
     await settle(lambda: len(llm.calls) == 2 and not rt.busy("5"))
+    await settle(lambda: sorted(r[0] for r in bot.reactions if r[1] == []) == [11, 12])  # answered: cleared
     assert llm.calls[1]["messages"][-1]["content"] == "q2\nq3"
     assert texts(bot) == ["first", "second"]
 
@@ -136,13 +150,14 @@ async def test_stop_cancels_the_request_clears_the_reaction_and_saves_nothing():
         await asyncio.sleep(60)
 
     llm = ScriptedLlm(hang)
-    bot, store, rt = await make(llm, reactions=True)
+    bot, store, rt = await make(llm, reactions=True, reaction_delay=0.02)
     rt.submit(job())
     await settle(lambda: rt.busy("5") and llm.calls)
     rt.submit(job(text="queued", msg_id=11, delay=0.01))
+    await settle(lambda: len(bot.reactions) >= 2)  # the slow turn and the queued message both carry a 👀
     assert await rt.stop("5") is True
     assert not rt.busy("5") and "5" not in store.sessions and bot.sent == []
-    assert bot.reactions[-1][1] == []
+    assert sorted(r[0] for r in bot.reactions if r[1] == []) == [10, 11]  # both cleared
     await asyncio.sleep(0.1)
     assert len(llm.calls) == 1  # the queue was discarded
     assert await rt.stop("5") is False
@@ -153,14 +168,14 @@ async def test_an_endpoint_error_is_shown_and_history_is_unchanged():
     bot, store, rt = await make(llm, reactions=True)
     rt.submit(job())
     await settle(lambda: bot.sent)
-    assert "bad temperature" in texts(bot)[0] and bot.reactions[-1][1] == ["👎"]
+    assert "bad temperature" in texts(bot)[0] and bot.reactions == []
     assert "5" not in store.sessions
 
 
 async def test_an_empty_answer_sends_nothing_and_is_not_a_failure():
-    bot, _, rt = await make(ScriptedLlm(say("")), reactions=True)
+    bot, store, rt = await make(ScriptedLlm(say("")), reactions=True)
     rt.submit(job())
-    await settle(lambda: bot.reactions and bot.reactions[-1][1] == ["👍"])
+    await settle(lambda: "5" in store.sessions and rt._runs == {})
     assert bot.sent == []
 
 

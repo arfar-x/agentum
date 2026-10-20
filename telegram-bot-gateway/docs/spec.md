@@ -116,7 +116,7 @@ A Telegram bot that is a client of any OpenAI-compatible Chat Completions endpoi
 | id | Requirement | Status |
 |---|---|---|
 | FR-OUT-01 | While a turn runs the bot MUST send a `typing` action every 2 seconds. | done |
-| FR-OUT-02 | When reactions are enabled (default off), the trigger MUST get 👀 at start, 👍 on success and 👎 on failure, and the reaction MUST be cleared on `/stop`. A failure to react MUST be ignored. | done |
+| FR-OUT-02 | When reactions are enabled (default), the bot MUST react 👀 only to a message that waits behind a running turn or whose turn has run longer than `REACTION_DELAY` seconds (default 10), and MUST remove the reaction when that message's turn ends or is stopped. It MUST NOT react to a message answered promptly. A failure to react MUST be ignored. | done |
 | FR-OUT-03 | Markdown MUST be converted to MarkdownV2 following Hermes's rules: code protected, headings as bold, tables as bullets or code, all other special characters escaped. | done |
 | FR-OUT-04 | When Telegram rejects the formatting, the same text MUST be re-sent as plain text. | done |
 | FR-OUT-05 | A message over 4,096 UTF-16 units MUST be split, each part suffixed `(i/n)`. | done |
@@ -168,7 +168,7 @@ A Telegram bot that is a client of any OpenAI-compatible Chat Completions endpoi
 
 | id | Requirement | Status |
 |---|---|---|
-| FR-CFG-01 | Variables: `BOT_TOKEN`, `OPENAI_BASE_URL`, `OPENAI_API_KEY` (optional, for `/v1/models` before a user is linked), `DEFAULT_MODEL`, `DATABASE_URL`, `CREDS_KEY`, `REACTIONS`, `SHOW_PROGRESS`, `REQUEST_TIMEOUT`, `WEBHOOK_URL`, `WEBHOOK_SECRET`. | done |
+| FR-CFG-01 | Variables: `BOT_TOKEN`, `OPENAI_BASE_URL`, `OPENAI_API_KEY` (optional, for `/v1/models` before a user is linked), `DEFAULT_MODEL`, `DATABASE_URL`, `CREDS_KEY`, `REACTIONS`, `REACTION_DELAY`, `SHOW_PROGRESS`, `REQUEST_TIMEOUT`, `WEBHOOK_URL`, `WEBHOOK_SECRET`. | done |
 | FR-CFG-02 | The module MUST NOT name a model, an organization or a user in a tracked file. | done |
 | FR-CFG-03 | A missing required variable MUST stop the start with a message naming it. | done |
 

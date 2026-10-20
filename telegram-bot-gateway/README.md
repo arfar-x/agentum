@@ -12,7 +12,7 @@ gateway-specific. Spec of record: [`docs/spec.md`](docs/spec.md).
   forwarded message came from.
 - **Media.** Photos, image files and albums go to the model as images; small text files are inlined; other
   files, stickers and locations become a text note. Voice notes are not supported yet.
-- **Typing, and optionally reactions.** Typing is shown while it works; set `REACTIONS=true` for 👀 / 👍 / 👎 on the message.
+- **Typing, and sparing reactions.** Typing is shown while it works. A 👀 appears only when it helps: on a message waiting behind a running turn, or when an answer takes more than 10 seconds; it is removed afterwards.
 - **Telegram-aware answers.** Every request carries a short system note: the user is in Telegram, answers should be brief and use Telegram-friendly Markdown and a few emojis.
 - **Questions and approvals.** The bot declares one tool, `clarify`. A question, or an approval the endpoint
   wants (agent-gateway asks before it writes), appears as a message with buttons; only the owner can tap.
