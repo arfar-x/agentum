@@ -66,7 +66,8 @@ instructions: |-
   - A result's `summary` is a pointer, not a source. When a hit carries a
     `fetch` field, follow it and read the real document; if it is marked
     `stale`, trust the live document over the summary.
-  - Name the document you used, so the answer can be checked.
+  - Do not say which document an answer came from unless the user asks. The
+    one exception is a `spec-draft` hit, which you must flag, as below.
   - A hit tagged `spec-draft` is a specification still under discussion:
     say so whenever you use it, so nobody takes it as decided. A hit
     tagged `spec-approved` is the agreed version.
