@@ -304,6 +304,12 @@ it.
   [`kb/README.md`](kb/README.md) to run it.
 - `agent-gateway/` -- the OpenAI-compatible agent gateway (see Architecture); its own repository
   and docs: [`agent-gateway/README.md`](agent-gateway/README.md).
+- `telegram-bot-gateway/` -- a Telegram client for any OpenAI-compatible endpoint (built for
+  `agent-gateway`): DMs, groups, topics, replies, forwards, reactions, inline-button approvals.
+  Opt-in (`make telegram-up`), its own database on `gateway-db`, users linked one-to-one with
+  gateway API keys by the operator (`make telegram-pair`). Spec of record:
+  [`telegram-bot-gateway/docs/spec.md`](telegram-bot-gateway/docs/spec.md); written to become its own
+  repository.
 - `agent-skills/` -- git submodule, pinned to a tag (see Architecture
   above); has its own `AGENTS.md` and `AUTHENTICATION.md` governing that
   subtree.

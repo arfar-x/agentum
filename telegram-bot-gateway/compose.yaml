@@ -1,0 +1,24 @@
+# The Telegram bot's service. The root docker-compose.yml `include:`s this file.
+# Opt-in (profile `telegram`): `make telegram-up`. It publishes no port -- it polls
+# Telegram -- and keeps its state in its own database on `gateway-db`, so it needs no
+# volume. Its variables are in .env.telegram-bot-gateway (copy .env.example; `make
+# telegram-up` does it for you).
+#
+# Networks, deliberately minimal: `telegram-gateway` is shared only with agent-gateway
+# (the bot reaches the gateway there and nothing else), `gateway-data` is where
+# `gateway-db` lives. It never joins `backend`. Both networks are declared by the root.
+services:
+  telegram-bot-gateway:
+    profiles: [telegram]
+    build:
+      context: .
+    image: agentflow-telegram-bot-gateway
+    restart: unless-stopped
+    env_file:
+      - path: .env.telegram-bot-gateway
+        required: false
+    networks: [telegram-gateway, gateway-data]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    mem_limit: 256m

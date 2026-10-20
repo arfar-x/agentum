@@ -8,6 +8,7 @@ SERVICE ?= api
 # Modules contribute their own targets and keep them next to their code; this
 # file keeps the stack's.
 include kb/module.mk
+include telegram-bot-gateway/module.mk
 
 .PHONY: help bootstrap up down restart ps logs build secrets backup restore test \
 	render-config librechat-migrate user-create user-list user-ban user-delete user-invite user-reset-password \
