@@ -96,17 +96,21 @@ class PostgresStore:
     async def get_thread(self, user_id: str, history_hash: str) -> Thread | None:
         async with self._pool.connection() as conn:
             row = await (await conn.execute(
-                "SELECT active_agent, client_opt_in FROM threads WHERE user_id=%s AND history_hash=%s",
+                "SELECT active_agent, client_opt_in, trace FROM threads WHERE user_id=%s AND history_hash=%s",
                 (user_id, history_hash))).fetchone()
-        return Thread(user_id, history_hash, row[0], row[1]) if row else None
+        if not row:
+            return None
+        trace = json.loads(self._vault.decrypt(row[2])) if row[2] else []
+        return Thread(user_id, history_hash, row[0], row[1], trace)
 
     async def put_thread(self, thread: Thread) -> None:
         async with self._pool.connection() as conn:
             await conn.execute(
-                "INSERT INTO threads (user_id, history_hash, active_agent, client_opt_in) VALUES (%s,%s,%s,%s) "
+                "INSERT INTO threads (user_id, history_hash, active_agent, client_opt_in, trace) VALUES (%s,%s,%s,%s,%s) "
                 "ON CONFLICT (user_id, history_hash) DO UPDATE SET active_agent=EXCLUDED.active_agent, "
-                "client_opt_in=EXCLUDED.client_opt_in, updated_at=now()",
-                (thread.user_id, thread.history_hash, thread.active_agent, thread.client_opt_in))
+                "client_opt_in=EXCLUDED.client_opt_in, trace=EXCLUDED.trace, updated_at=now()",
+                (thread.user_id, thread.history_hash, thread.active_agent, thread.client_opt_in,
+                 self._vault.encrypt(json.dumps(thread.trace, ensure_ascii=False).encode()) if thread.trace else None))
 
     def _pack(self, pending: PendingTurn) -> bytes:
         body = {

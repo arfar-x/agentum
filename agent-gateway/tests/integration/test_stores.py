@@ -1,4 +1,4 @@
-# Covers: FR-OPS-04, FR-AUT-02, FR-AUT-03, FR-AUT-04, FR-CRD-02, FR-CRD-03, FR-OPS-01, FR-OPS-02, FR-OPS-03
+# Covers: FR-MEM-03, FR-OPS-04, FR-AUT-02, FR-AUT-03, FR-AUT-04, FR-CRD-02, FR-CRD-03, FR-OPS-01, FR-OPS-02, FR-OPS-03
 
 import asyncio
 import os
@@ -93,6 +93,18 @@ async def test_threads_survive_a_reconnect_and_are_user_scoped(store):
         assert await again.get_thread("u2", "h1") is None
     finally:
         await again.close()
+
+
+async def test_a_threads_trace_is_stored_encrypted_and_read_back(store):
+    trace = [{"agent": "a", "tool": "kb_search", "args": {"queries": ["distinctive-phrase"]}, "ok": True}]
+    await store.put_thread(Thread("u1", "h2", "tasks", False, trace))
+    assert (await store.get_thread("u1", "h2")).trace == trace
+    assert (await store.get_thread("u2", "h2")) is None
+    async with store._pool.connection() as c:
+        raw = (await (await c.execute("SELECT trace FROM threads WHERE history_hash='h2'")).fetchone())[0]
+    assert b"distinctive-phrase" not in bytes(raw) and b"kb_search" not in bytes(raw)
+    await store.put_thread(Thread("u1", "h3", "tasks"))
+    assert (await store.get_thread("u1", "h3")).trace == []
 
 
 async def test_the_redis_lock_serializes_and_the_rate_limit_counts():

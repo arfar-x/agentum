@@ -4,8 +4,8 @@
 |---|---|
 | **Spec ID** | SPEC-GW-001 |
 | **Status** | In progress |
-| **Version** | 0.6.0 |
-| **Last updated** | 2026-10-14 |
+| **Version** | 0.7.0 |
+| **Last updated** | 2026-10-20 |
 | **Implements** | `agent-gateway/` module |
 | **Related** | [`specs/001-agent-gateway/spec.md`](../specs/001-agent-gateway/spec.md), [`README.md`](../README.md) |
 
@@ -45,6 +45,7 @@ A self-hosted service that serves configured agents through an OpenAI-compatible
 | FR-022 … FR-026 | FR-AUT-01 … FR-AUT-06, FR-OPS-01 … FR-OPS-04 |
 | FR-027 | FR-CFG-01 … FR-CFG-03 |
 | FR-028, FR-029 | NFR-ARC-01 … NFR-ARC-04 |
+| (added in 0.7.0) | FR-MEM-01 … FR-MEM-06 |
 
 ## 4. Acceptance scenarios
 
@@ -206,5 +207,18 @@ A self-hosted service that serves configured agents through an OpenAI-compatible
 | NFR-ARC-02 | `domain/` MUST NOT depend on `application/`. | done |
 | NFR-ARC-03 | Use cases MUST be provable with in-memory fakes. | done |
 | NFR-ARC-04 | The application core MUST take a neutral turn request, independent of HTTP. | done |
+
+### 5.15 Memory of earlier work — `FR-MEM`
+
+A client sees only the gateway's visible replies, so on the next request the model has no sign that its answer came from tool work the gateway did. Asked how it knows, it concludes it guessed.
+
+| id | Requirement | Status |
+|---|---|---|
+| FR-MEM-01 | After a turn, the gateway MUST record each tool call it ran itself during that turn: the agent, the tool, its arguments, and whether it worked. A catalog lookup made before the model answered MUST be recorded the same way. | done |
+| FR-MEM-02 | The record MUST NOT contain what a tool returned, and MUST NOT include calls run by the client, which are already in the visible history. | done |
+| FR-MEM-03 | The record MUST be stored with the thread, encrypted, so that only the owning user's id reads it. | done |
+| FR-MEM-04 | The record MUST be bounded: each argument value is shortened, secrets-named arguments are replaced, at most 40 entries are kept and the oldest go first. | done |
+| FR-MEM-05 | On a later turn of the same thread the model MUST be told, in a note outside the visible messages, what the gateway ran earlier, that the user did not see it, and not to say it guessed when the list shows it looked the answer up. | done |
+| FR-MEM-06 | The note MUST NOT appear in any response, and a conversation whose history cannot be matched (FR-HND-03) MUST start without one. | done |
 
 *planned* = specified, not built. *partial* = domain and application exist, adapter wiring does not. *done* = built and claimed by a test.
