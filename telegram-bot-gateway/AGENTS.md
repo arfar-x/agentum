@@ -21,6 +21,16 @@ only says how it is wired into agentflow.
 - **Queue, never interrupt.** A running turn is cancelled only by `/stop`.
 - The module publishes no port and joins only `telegram-gateway` and `gateway-data`, never `backend`.
 
+## Specs
+
+The behaviour of the module is specified under [`specs/`](specs/glossary.md), one numbered directory per
+capability, in the repository constitution's order of work (`.specify/memory/constitution.md`): change the
+spec first, then plan, tasks, code and tests, in the same change. [`docs/spec.md`](docs/spec.md) stays the
+test-gated registry of requirement ids and maps them to the specs. Defects found when the specs were written
+are listed in each spec's `Known Defects and Gaps` and are scheduled for correction; the strict
+expected-failure tests in `tests/test_known_defects.py` turn into failures when a defect is fixed, and the
+marker is then removed with the fix.
+
 ## Commands
 
 ```bash

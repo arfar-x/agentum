@@ -308,7 +308,8 @@ it.
   `agent-gateway`): DMs, groups, topics, replies, forwards, reactions, inline-button approvals.
   Opt-in (`make telegram-up`), its own database on `gateway-db`, users linked one-to-one with
   gateway API keys by the operator (`make telegram-pair`). Spec of record:
-  [`telegram-bot-gateway/docs/spec.md`](telegram-bot-gateway/docs/spec.md); written to become its own
+  [`telegram-bot-gateway/docs/spec.md`](telegram-bot-gateway/docs/spec.md), with the capability specs in
+  [`telegram-bot-gateway/specs/`](telegram-bot-gateway/specs/glossary.md); written to become its own
   repository.
 - `agent-skills/` -- git submodule, pinned to a tag (see Architecture
   above); has its own `AGENTS.md` and `AUTHENTICATION.md` governing that

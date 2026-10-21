@@ -4,10 +4,10 @@
 |---|---|
 | **Spec ID** | SPEC-TG-001 |
 | **Status** | Implemented; not yet run against the live Telegram API |
-| **Version** | 0.2.0 |
+| **Version** | 0.3.0 |
 | **Last updated** | 2026-10-20 |
 | **Implements** | `telegram-bot-gateway/` module |
-| **Related** | [`agent-gateway/docs/spec.md`](../../agent-gateway/docs/spec.md) |
+| **Related** | [`agent-gateway/docs/spec.md`](../../agent-gateway/docs/spec.md), [`specs/`](../specs/glossary.md) |
 
 Requirement keywords (**MUST**, **MUST NOT**, **SHOULD**, **MAY**) are used as defined in RFC 2119.
 
@@ -220,3 +220,100 @@ Root glue: `make telegram-setup` (create role and database on `gateway-db`), `ma
 | 1 | Is the bot's `OPENAI_API_KEY` needed before linking, only to list models for `/model`? | Use the user's own key; keep the variable optional. |
 | 2 | Group sender identity: should the model see who wrote each message in a group topic shared by users? | No; sessions are per user. |
 | 3 | `clarify` for endpoints that never call it: does declaring it change their behavior? | Declared always; check against agent-gateway and plain vLLM during build. |
+
+## 9. Baseline specs and traceability
+
+This document stays the short, test-gated registry of requirement ids. The behaviour is specified in detail, with stories, exact rules, data model, contracts, decisions and known defects, in the Spec Kit directories under [`../specs/`](../specs/glossary.md), whose terms follow [`../specs/glossary.md`](../specs/glossary.md). A requirement of a directory is cited as `<number>/FR-###`.
+
+| Directory | Capability |
+|---|---|
+| `001-account-linking` | Pairing, operator approval, unlinking, the gate on unlinked users |
+| `002-conversations` | Turns, history, queue, stop, new, settings and commands |
+| `003-incoming-messages` | Triggers, groups, topics, replies, forwards, media, batching |
+| `004-replies-and-feedback` | Formatting, splitting, typing, reactions, progress, delivery fallbacks |
+| `005-questions-and-approvals` | The `clarify` tool, cards, answers, expiry |
+| `006-operations` | Configuration, start-up, health, deployment, database role |
+
+| Id here | Specified in |
+|---|---|
+| FR-LNK-01 | 001/FR-001, 001/FR-015, 001/FR-017 |
+| FR-LNK-02 | 001/FR-002, 001/FR-003 |
+| FR-LNK-03 | 001/FR-004, 001/FR-005 |
+| FR-LNK-04 | 001/FR-007, 001/FR-009, 001/FR-010, 001/FR-011 |
+| FR-LNK-05 | 001/FR-010, 001/FR-014 |
+| FR-LNK-06 | 001/FR-013 |
+| FR-LNK-07 | 001/FR-016 |
+| FR-LNK-08 | 001 research (replaceable step), constitution III |
+| FR-LNK-09 | 001/FR-012, constitution I |
+| FR-SES-01 | 002/FR-019 |
+| FR-SES-02 | 002/FR-001, 002/FR-002, 002/FR-018 |
+| FR-SES-03 | 002/FR-017, 002/FR-018 |
+| FR-SES-04 | 002/FR-025 |
+| FR-SES-05 | 003/FR-022, 004/FR-019 |
+| FR-SES-06 | 002/FR-002, 002/FR-003 |
+| FR-INB-01 | 003/FR-002 |
+| FR-INB-02 | 003/FR-003 |
+| FR-INB-03 | 003/FR-004 |
+| FR-INB-04 | 003/FR-005 |
+| FR-INB-05 | 003/FR-011 |
+| FR-INB-06 | 003/FR-012 |
+| FR-INB-07 | 003/FR-021 |
+| FR-INB-08 | 003/FR-013, 003/FR-020 |
+| FR-INB-09 | 003/FR-014, 003/FR-015 |
+| FR-INB-10 | 003/FR-016 |
+| FR-INB-11 | 003/FR-010 |
+| FR-INB-12 | 003/FR-009 |
+| FR-INB-13 | 003/FR-020, 002/FR-013 |
+| FR-INB-14 | 003/FR-018 |
+| FR-TRN-01 | 002/FR-001 |
+| FR-TRN-02 | 002/FR-006 |
+| FR-TRN-03 | 002/FR-014 |
+| FR-TRN-04 | 002/FR-016, 002/FR-009 |
+| FR-TRN-05 | 002/FR-015 |
+| FR-TRN-06 | 002/FR-009, 002/FR-010, 002/FR-011 |
+| FR-TRN-07 | 002/FR-012 (differs: see KD-008) |
+| FR-TRN-08 | 002/FR-001, 002 `contracts/endpoint.md` (system note) |
+| FR-OUT-01 | 004/FR-001 |
+| FR-OUT-02 | 004/FR-002, 004/FR-003, 004/FR-004 |
+| FR-OUT-03 | 004/FR-010, 004/FR-011 |
+| FR-OUT-04 | 004/FR-012 |
+| FR-OUT-05 | 004/FR-006, 004/FR-007, 004/FR-008, 004/FR-009 |
+| FR-OUT-06 | 004/FR-013 |
+| FR-OUT-07 | 004/FR-014 |
+| FR-OUT-08 | 004/FR-017 |
+| FR-OUT-09 | 004/FR-005 |
+| FR-OUT-10 | 004/FR-015 |
+| FR-OUT-11 | 004/FR-020, 002/FR-007 |
+| FR-ASK-01 | 005 `contracts/clarify-tool.md`, 005/FR-001 |
+| FR-ASK-02 | 005/FR-003 |
+| FR-ASK-03 | 005/FR-005, 005/FR-008, 005/FR-009 |
+| FR-ASK-04 | 005/FR-003 |
+| FR-ASK-05 | 005/FR-005, 005/FR-006 |
+| FR-ASK-06 | 005/FR-005 |
+| FR-ASK-07 | 005/FR-010, 005/FR-011 (expiry is applied at the owner's next message: see KD-004) |
+| FR-CMD-01 | 002/FR-028, 006/FR-008, 001/FR-018 |
+| FR-CMD-02 | 002/FR-021 |
+| FR-CMD-03 | 002/FR-022 |
+| FR-CMD-04 | 002/FR-023, 002/FR-024, 002/FR-027 |
+| FR-CMD-05 | 002/FR-026 |
+| FR-CMD-06 | 002/FR-024 |
+| FR-CMD-07 | 002/FR-020 |
+| FR-CMD-08 | 001/FR-018 |
+| FR-OPS-01 | 006/FR-005, 006/FR-006 |
+| FR-OPS-02 | 006/FR-005 |
+| FR-OPS-03 | 003/FR-001 |
+| FR-OPS-04 | 006/FR-007 |
+| FR-OPS-05 | 006/FR-014, 006/FR-015 |
+| FR-OPS-06 | 006/FR-010, 006 SC-005 |
+| FR-OPS-07 | 006/FR-011 |
+| FR-CFG-01 | 006/FR-001 |
+| FR-CFG-02 | constitution I |
+| FR-CFG-03 | 006/FR-002 |
+| NFR-ARC-01 to NFR-ARC-04 | constitution I, III, IV and each plan's Constitution Check |
+| AS-01 | 002 User Story 1 |
+| AS-02 | 001 User Stories 1 and 3 |
+| AS-03 | 003 User Story 2, 004 User Story 5 |
+| AS-04 | 005 User Story 1 |
+| AS-05 | 003 User Story 3 |
+
+Known defects and gaps are recorded in the `Known Defects and Gaps` section of the directory they belong to: KD-001, KD-003, KD-006, KD-007, KD-008 and GAP-001, GAP-003, GAP-006 in 002; KD-002, GAP-002, GAP-004 in 006; KD-004 and GAP-005 in 005; KD-005 in 003; GAP-007, GAP-008, GAP-009 in 001. All are scheduled for the next task.
