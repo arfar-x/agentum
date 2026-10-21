@@ -113,3 +113,4 @@ class Thread:
     history_hash: str
     active_agent: str
     client_opt_in: bool = False   # the user chose to use the client's own tools for unavailable ones
+    trace: list[dict[str, Any]] = field(default_factory=list)  # what the gateway ran in earlier turns (domain/trace.py)

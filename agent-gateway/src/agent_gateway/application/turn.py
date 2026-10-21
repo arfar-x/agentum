@@ -44,6 +44,7 @@ from agent_gateway.domain.history import chain_hash, lookup_hash
 from agent_gateway.domain.interaction import APPROVE, REJECT, AskTool, find_ask_tool, parse_answer
 from agent_gateway.domain.messages import ChatMessage, FunctionCall, ToolCall, ToolDef, ToolFunction, Usage
 from agent_gateway.domain.params import merge_parameters
+from agent_gateway.domain import trace
 from agent_gateway.domain.prompt import compose_system_prompt, unavailable_note
 from agent_gateway.domain.toolroute import choose_route, match_client_tool, matching_client_tools, mentions_any, resolve_vars
 
@@ -108,6 +109,8 @@ class TurnState:
     exposed: Exposed | None = None
     step_started: bool = False
     client_opt_in: bool = False
+    trace_prior: list[dict[str, Any]] = field(default_factory=list)   # earlier turns of this thread
+    trace_new: list[dict[str, Any]] = field(default_factory=list)     # this turn's gateway-run calls
 
 
 # --------------------------------------------------------------------------- helpers
@@ -256,6 +259,7 @@ async def prepare(state: TurnState, deps: Deps) -> None:
         state.agent_id = thread.active_agent
     if thread:
         state.client_opt_in = thread.client_opt_in
+        state.trace_prior = list(thread.trace)
 
     pending: PendingTurn | None = None
     code_decision: tuple[str, str] | None = None
@@ -303,9 +307,11 @@ async def prepare(state: TurnState, deps: Deps) -> None:
         try:
             hits = await deps.retriever.search([last.text()], kb.limit, kb.types)
             state.context.append(retrieval.format_hits(hits))
+            state.trace_new.append(trace.entry(state.agent_id, trace.CATALOG_LOOKUP, {"query": last.text()}, ok=True, found=len(hits)))
             await _note(state, deps, activity.retrieval(len(hits)))
         except Exception:  # noqa: BLE001 -- a catalog failure must never fail the turn
             state.context.append(retrieval.UNAVAILABLE)
+            state.trace_new.append(trace.entry(state.agent_id, trace.CATALOG_LOOKUP, {"query": last.text()}, ok=False))
     state.stage = "model"
 
 
@@ -326,6 +332,9 @@ def _llm_request(state: TurnState, deps: Deps, ex: Exposed) -> LlmRequest:
     agent = _agent(state, deps)
     system = ChatMessage(role="system", content=compose_system_prompt(agent, state.client_system))
     notes = list(state.context)
+    earlier = trace.note(state.trace_prior)
+    if earlier:
+        notes.append(earlier)
     if ex.unavailable:
         notes.append(unavailable_note(ex.unavailable, state.client_opt_in))
     context = [ChatMessage(role="system", content=c) for c in notes]
@@ -516,6 +525,7 @@ async def _run_gateway(state: TurnState, deps: Deps, call: ToolCall, args: dict[
             run_args["confirm"] = True
     await _note(state, deps, activity.tool_started(spec.name))
     result = await deps.tools.call(spec.server, spec.name, run_args, creds)
+    state.trace_new.append(trace.entry(state.agent_id, spec.name, args, ok=not result.is_error))
     text = corrections.redact(result.text, creds.values())[: deps.settings.tool_result_chars]
     state.messages.append(_tool_message(call.id, corrections.tool_failed(spec.name, text) if result.is_error else text))
     await _note(state, deps, activity.tool_finished(spec.name))
@@ -586,7 +596,8 @@ async def finish(state: TurnState, deps: Deps) -> None:
     visible = ChatMessage(
         role="assistant", content=state.reply_text or None, tool_calls=state.client_calls or None)
     key = chain_hash(state.request.user_id, [*state.request.messages, visible])
-    await deps.store.put_thread(Thread(state.request.user_id, key, state.agent_id, state.client_opt_in))
+    await deps.store.put_thread(Thread(state.request.user_id, key, state.agent_id, state.client_opt_in,
+                                       trace.merge(state.trace_prior, state.trace_new)))
     await deps.sink.emit(Done(state.finish_reason, state.usage))
     state.stage = END
 
