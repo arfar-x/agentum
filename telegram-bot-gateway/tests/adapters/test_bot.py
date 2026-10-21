@@ -1,3 +1,4 @@
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -298,7 +299,7 @@ class Query:
 
 
 async def card(env, owner=5):
-    session = Session("5", owner, pending=Pending("call_1", "Run it?", ["Approve", "Reject"], 5, 1.0, card_message_id=77))
+    session = Session("5", owner, pending=Pending("call_1", "Run it?", ["Approve", "Reject"], 5, time.time(), card_message_id=77))
     await env.store.save_session(session)
     message = SimpleNamespace(chat=SimpleNamespace(id=5, type="private", is_forum=False), message_id=77,
                               message_thread_id=None, is_topic_message=False)
