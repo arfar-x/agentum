@@ -50,8 +50,5 @@ __pycache__/
 # the agent gateway's secrets (copy .env.agent-gateway.example)
 .env.agent-gateway
 
-# the Telegram bot's secrets (copy telegram-bot-gateway/.env.example)
-telegram-bot-gateway/.env.telegram-bot-gateway
-
 # the gateway's former standalone repository, kept for its history (restore with: mv agent-gateway/.git.standalone agent-gateway/.git)
 agent-gateway/.git.standalone/

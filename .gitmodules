@@ -1,3 +1,7 @@
 [submodule "agent-skills"]
 	path = agent-skills
 	url = https://github.com/arfar-x/agent-skills.git
+[submodule "telegram-bot-gateway"]
+	path = telegram-bot-gateway
+	url = https://github.com/arfar-x/telegram-bot-openai-gateway.git
+	branch = main

@@ -19,7 +19,7 @@ include:
   - path: kb/compose.yaml
     env_file: kb/.env
   # No env_file here: the bot's service reads its own file, and nothing in it is interpolated.
-  - path: telegram-bot-gateway/compose.yaml
+  - path: integrations/telegram-bot/compose.yaml
 
 networks:
   frontend:

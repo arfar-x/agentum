@@ -60,11 +60,11 @@ for module_env in */.env; do
 done
 
 # The Telegram bot's CREDS_KEY decrypts the API keys stored in its database (inside gateway_db_data).
-if [ -f telegram-bot-gateway/.env.telegram-bot-gateway ]; then
-  mkdir -p "${OUT_DIR}/telegram-bot-gateway"
-  cp telegram-bot-gateway/.env.telegram-bot-gateway "${OUT_DIR}/telegram-bot-gateway/.env.telegram-bot-gateway"
-  chmod 600 "${OUT_DIR}/telegram-bot-gateway/.env.telegram-bot-gateway"
-  echo "  telegram-bot-gateway/.env.telegram-bot-gateway -> ${OUT_DIR}/telegram-bot-gateway/ (contains secrets)"
+if [ -f integrations/telegram-bot/.env ]; then
+  mkdir -p "${OUT_DIR}/integrations/telegram-bot"
+  cp integrations/telegram-bot/.env "${OUT_DIR}/integrations/telegram-bot/.env"
+  chmod 600 "${OUT_DIR}/integrations/telegram-bot/.env"
+  echo "  integrations/telegram-bot/.env -> ${OUT_DIR}/integrations/telegram-bot/ (contains secrets)"
 fi
 
 echo "Done: ${OUT_DIR}"

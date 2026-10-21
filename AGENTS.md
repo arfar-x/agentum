@@ -304,13 +304,14 @@ it.
   [`kb/README.md`](kb/README.md) to run it.
 - `agent-gateway/` -- the OpenAI-compatible agent gateway (see Architecture); its own repository
   and docs: [`agent-gateway/README.md`](agent-gateway/README.md).
-- `telegram-bot-gateway/` -- a Telegram client for any OpenAI-compatible endpoint (built for
-  `agent-gateway`): DMs, groups, topics, replies, forwards, reactions, inline-button approvals.
-  Opt-in (`make telegram-up`), its own database on `gateway-db`, users linked one-to-one with
-  gateway API keys by the operator (`make telegram-pair`). Spec of record:
-  [`telegram-bot-gateway/docs/spec.md`](telegram-bot-gateway/docs/spec.md), with the capability specs in
-  [`telegram-bot-gateway/specs/`](telegram-bot-gateway/specs/glossary.md); written to become its own
-  repository.
+- `telegram-bot-gateway/` -- git submodule,
+  [telegram-bot-openai-gateway](https://github.com/arfar-x/telegram-bot-openai-gateway): a Telegram client
+  for any OpenAI-compatible endpoint. It is its own repository with its own specs, tests and `AGENTS.md`,
+  and knows nothing about this stack; once you are working inside it, that repository's `AGENTS.md`
+  governs. What ties it to the stack (compose service, `make telegram-*` targets, variables, scripts) is in
+  [`integrations/telegram-bot/`](integrations/telegram-bot/README.md): opt-in (`make telegram-up`), its own
+  database on `gateway-db`, users linked one-to-one with gateway API keys (`make telegram-pair`).
+  Bumping it is a one-line commit of the new submodule pointer.
 - `agent-skills/` -- git submodule, pinned to a tag (see Architecture
   above); has its own `AGENTS.md` and `AUTHENTICATION.md` governing that
   subtree.

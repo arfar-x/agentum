@@ -1,6 +1,6 @@
 <!--
 Sync Impact Report
-Version: 1.2.0 -> 1.3.0 (MINOR)
+Version: 1.2.0 -> 1.3.1 (MINOR, then PATCH)
 Modified principles: I (application modules), II (spec of record), III (hexagonal core), IV (published ports),
   Additional Constraints (no new infrastructure), Development Workflow (gates and commit scopes)
 Added: telegram-bot-gateway/ named as an application module, with the rules that follow from it
@@ -22,10 +22,10 @@ and scripts around LibreChat, a self-hosted OpenAI-compatible model endpoint and
   here, or built generically upstream (a LibreChat contribution, an `agent-skills` release). It
   MUST NOT be met by patching an upstream component inside this repository.
 - `kb/`, `agent-gateway/` and `telegram-bot-gateway/` are the application modules of this
-  repository's own. `agent-gateway/` and `telegram-bot-gateway/` are generic and self-contained so
-  they can become their own repositories: they name no model or organization, and agentflow only
-  wires them up. `telegram-bot-gateway/` MUST NOT import another module's code; it depends only on
-  an OpenAI-compatible Chat Completions endpoint.
+  repository's own. `agent-gateway/` is generic and self-contained so it can become a submodule: it
+  names no model or organization, and agentflow only wires it up. `telegram-bot-gateway/` already is
+  its own repository, taken in as a git submodule: it MUST know nothing about this stack, and
+  everything that ties it to the stack lives in `integrations/telegram-bot/`.
 - Nothing tracked MAY name a specific model, organization or person. Such details live in `.env`
   and the generated configuration.
 - Generated files (`config/librechat.yaml`, `searxng/settings.yml`) MUST NOT be edited by hand.
@@ -167,4 +167,4 @@ written in tracked configuration is reviewable.
 - Plans produced by `/speckit-plan` MUST include a constitution check. A violation is either
   removed from the plan or recorded with its justification.
 
-**Version**: 1.3.0 | **Ratified**: 2026-10-04 | **Last Amended**: 2026-10-21
+**Version**: 1.3.1 | **Ratified**: 2026-10-04 | **Last Amended**: 2026-10-21
