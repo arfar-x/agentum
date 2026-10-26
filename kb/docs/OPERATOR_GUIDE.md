@@ -183,6 +183,40 @@ roughly 20 MB before Postgres compresses them. `make kb-status` shows the
 documents kept, how many were truncated, their text size and the table's size
 on disk under `raw_content`.
 
+### 6. Optionally, restrict a source to groups
+
+A source with `groups:` is visible only to callers who are in one of them:
+
+```yaml
+sources:
+  - id: eng-runbooks
+    kind: confluence
+    spaces: [ENG]
+    groups: [engineering]      # no groups, or [], = everyone
+```
+
+Who is "in a group" is decided by the agent gateway, which reads it from the
+identity provider and sends it with every catalog call together with the shared
+`KB_TRUST_SECRET`. Set the same value in `kb/.env` and the gateway's env file
+(`openssl rand -hex 32`). The rules to know:
+
+- A caller with no group information -- LibreChat, a gateway without the
+  secret, anything else on the network -- sees only sources without `groups:`.
+  Restricted entries do not appear in search, counts or limits, and reading one
+  by id answers "not found", exactly like an id that does not exist.
+- Kept text (`store_raw_content`) follows its source: it is as visible as the
+  entry.
+- The scheduler writes the groups to the catalog database within a tick of the
+  file changing, and before it writes any entry of that source. Removing a
+  source from the file does not widen access: its groups stay in force while
+  it still has entries, until the entries are retired.
+- A source with no recorded groups at all is hidden from everyone (fail
+  closed). Migration 005 records every existing source as unrestricted, so
+  nothing changes on upgrade until you add `groups:`.
+- The CLI, scheduler and admin console are operator tools and see everything.
+  The console shows each source's groups but does not edit them: change the
+  line in `sources.yaml`.
+
 ## How it stays current
 
 Four mechanisms, each switchable per source in `kb/config/sources.yaml`:

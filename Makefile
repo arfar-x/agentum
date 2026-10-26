@@ -9,10 +9,11 @@ SERVICE ?= api
 # file keeps the stack's.
 include kb/module.mk
 include integrations/telegram-bot/module.mk
+include integrations/keycloak/module.mk
 
 .PHONY: help bootstrap up down restart ps logs build secrets backup restore test \
 	render-config librechat-migrate user-create user-list user-ban user-delete user-invite user-reset-password \
-	agent-export agent-import gateway-up gateway-down gateway-test gateway-key-create gateway-key-list gateway-key-revoke gateway-creds-set
+	agent-export agent-import gateway-up gateway-down gateway-test gateway-key-register gateway-key-create gateway-key-list gateway-key-revoke gateway-creds-set gateway-creds-list gateway-audit gateway-owner-purge
 
 help: ## Show this list
 	@grep -hE '^[a-zA-Z0-9_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -117,14 +118,35 @@ gateway-down: ## Stop the agent gateway and its stores (volumes are kept)
 gateway-test: ## Run the gateway's suite, including the Postgres/Redis tests, in throwaway containers
 	cd agent-gateway && . .venv/bin/activate && python -m pytest -q && scripts/test-services.sh -q
 
-gateway-key-create: ## Issue an API key, e.g. `make gateway-key-create USER=alice@example.org`
-	docker compose exec agent-gateway python -m agent_gateway key create $(USER)
 
-gateway-key-list: ## List gateway API keys
-	docker compose exec agent-gateway python -m agent_gateway key list
+# The gateway's identity commands (specs/003-identity-access). OWNER is a person's Keycloak account id
+# (the `sub` claim; docs/RUNBOOK_IDENTITY.md says where to find it). Secrets are read from the terminal.
+gateway-key-register: ## Register a person's own model key (typed in): `make gateway-key-register OWNER=<sub> [LABEL=...]`
+	@test -n "$(OWNER)" || { echo "Usage: make gateway-key-register OWNER=<keycloak account id> [LABEL=...]" >&2; exit 1; }
+	docker compose exec agent-gateway python -m agent_gateway key register-llm --owner $(OWNER) $(if $(LABEL),--label $(LABEL),)
 
-gateway-key-revoke: ## Revoke a key, e.g. `make gateway-key-revoke KEY_ID=...`
+gateway-key-create: ## Issue a gateway key (only with GATEWAY_ISSUE_KEYS=true): `make gateway-key-create OWNER=<sub> [LABEL=...]`
+	@test -n "$(OWNER)" || { echo "Usage: make gateway-key-create OWNER=<keycloak account id> [LABEL=...]" >&2; exit 1; }
+	docker compose exec agent-gateway python -m agent_gateway key create --owner $(OWNER) $(if $(LABEL),--label $(LABEL),)
+
+gateway-key-list: ## List a person's keys, never the secrets: `make gateway-key-list OWNER=<sub>`
+	@test -n "$(OWNER)" || { echo "Usage: make gateway-key-list OWNER=<keycloak account id>" >&2; exit 1; }
+	docker compose exec agent-gateway python -m agent_gateway key list --owner $(OWNER)
+
+gateway-key-revoke: ## Revoke a key: `make gateway-key-revoke KEY_ID=...`
 	docker compose exec agent-gateway python -m agent_gateway key revoke $(KEY_ID)
 
-gateway-creds-set: ## Store a credential for a user: `make gateway-creds-set USER=a@b SERVER=agent-skills VAR=JIRA_PASSWORD`
-	docker compose exec agent-gateway python -m agent_gateway creds set $(USER) $(SERVER) $(VAR)
+gateway-creds-set: ## Store a tool credential (value typed in): `make gateway-creds-set OWNER=<sub> SERVER=agent-skills VAR=JIRA_PASSWORD`
+	@test -n "$(OWNER)" && test -n "$(SERVER)" && test -n "$(VAR)" || { echo "Usage: make gateway-creds-set OWNER=<sub> SERVER=<server> VAR=<variable>" >&2; exit 1; }
+	docker compose exec agent-gateway python -m agent_gateway creds set --owner $(OWNER) $(SERVER) $(VAR)
+
+gateway-creds-list: ## Which credentials a person has set (names only): `make gateway-creds-list OWNER=<sub>`
+	@test -n "$(OWNER)" || { echo "Usage: make gateway-creds-list OWNER=<sub>" >&2; exit 1; }
+	docker compose exec agent-gateway python -m agent_gateway creds list --owner $(OWNER)
+
+gateway-audit: ## Recent audit events: `make gateway-audit [LIMIT=50] [SINCE=1d] [ACTOR=<sub>] [ACTION=auth.denied]`
+	docker compose exec agent-gateway python -m agent_gateway audit list --limit $(or $(LIMIT),50) $(if $(SINCE),--since $(SINCE),) $(if $(ACTOR),--actor $(ACTOR),) $(if $(ACTION),--action $(ACTION),)
+
+gateway-owner-purge: ## Delete everything the gateway holds for a person (irreversible): `make gateway-owner-purge OWNER=<sub>`
+	@test -n "$(OWNER)" || { echo "Usage: make gateway-owner-purge OWNER=<keycloak account id>" >&2; exit 1; }
+	docker compose exec agent-gateway python -m agent_gateway owner purge --owner $(OWNER) --yes

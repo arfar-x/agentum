@@ -1,0 +1,202 @@
+{
+  "realm": "${KEYCLOAK_REALM}",
+  "enabled": true,
+  "displayName": "agentflow",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "offlineSessionIdleTimeout": 2592000,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+  "oauth2DeviceCodeLifespan": 600,
+  "oauth2DevicePollingInterval": 5,
+  "bruteForceProtected": true,
+  "eventsEnabled": true,
+  "eventsExpiration": 7776000,
+  "eventsListeners": ["jboss-logging"],
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": true,
+
+  "clientScopes": [
+    {
+      "name": "gateway-audience",
+      "description": "Puts the agent-gateway client in the aud claim of access tokens",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "gateway-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "agent-gateway",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "groups",
+      "description": "The groups claim: leaf group names, no path",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "groups",
+            "full.path": "false",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+
+  "roles": {
+    "client": {
+      "agent-gateway": [
+        { "name": "agent-user", "description": "May use an agent" },
+        { "name": "agent-writer", "description": "May use an agent's write tools" }
+      ]
+    }
+  },
+
+  "groups": [
+    { "name": "product",     "clientRoles": { "agent-gateway": ["agent-user"] } },
+    { "name": "engineering", "clientRoles": { "agent-gateway": ["agent-user"] } },
+    { "name": "leads",       "clientRoles": { "agent-gateway": ["agent-writer"] } },
+    { "name": "automation",  "clientRoles": {} }
+  ],
+
+  "clients": [
+    {
+      "clientId": "agent-gateway",
+      "name": "Agent gateway (audience and roles only)",
+      "description": "Nobody signs in to this client. It names the gateway as the audience of tokens and owns the gateway's client roles.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "defaultClientScopes": [],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "agent-gateway-portal",
+      "name": "Agent gateway portal",
+      "description": "The portal's sign-in",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false,
+      "redirectUris": ["${GATEWAY_PUBLIC_URL}/portal/callback"],
+      "webOrigins": [],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "${GATEWAY_PUBLIC_URL}/portal/login"
+      },
+      "defaultClientScopes": ["basic", "profile", "gateway-audience", "roles"],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "telegram-bot",
+      "name": "Telegram bot",
+      "description": "Device authorization grant only; the bot requests openid offline_access",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "attributes": {
+        "oauth2.device.authorization.grant.enabled": "true"
+      },
+      "defaultClientScopes": ["basic", "profile", "gateway-audience", "groups", "roles"],
+      "optionalClientScopes": ["offline_access"]
+    },
+    {
+      "clientId": "agent-gateway-directory",
+      "name": "Agent gateway directory sync",
+      "description": "Read-only service account the gateway uses to copy people, groups and roles",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "fullScopeAllowed": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "defaultClientScopes": ["roles"],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "agentflow-automation",
+      "name": "Automation (template)",
+      "description": "Disabled template. Copy it per automation, enable the copy, and put its service-account user in groups.",
+      "enabled": false,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "fullScopeAllowed": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "defaultClientScopes": ["basic", "profile", "gateway-audience", "groups", "roles"],
+      "optionalClientScopes": []
+    }
+  ],
+
+  "clientScopeMappings": {
+    "agent-gateway": [
+      { "client": "agent-gateway-portal", "roles": ["agent-user", "agent-writer"] },
+      { "client": "telegram-bot",         "roles": ["agent-user", "agent-writer"] },
+      { "client": "agentflow-automation", "roles": ["agent-user", "agent-writer"] }
+    ],
+    "realm-management": [
+      { "client": "agent-gateway-directory", "roles": ["view-users", "query-users", "query-groups", "view-clients"] }
+    ]
+  },
+
+  "serviceAccountRoles": {
+    "agent-gateway-directory": {
+      "realm-management": ["view-users", "query-users", "query-groups", "view-clients"]
+    }
+  }
+}

@@ -23,9 +23,8 @@ def _usage(raw: dict[str, Any] | None) -> Usage:
 
 
 class HttpLlm:
-    def __init__(self, client: httpx.AsyncClient, *, api_key: str = "", retries: int = 3, backoff: float = 0.5) -> None:
+    def __init__(self, client: httpx.AsyncClient, *, retries: int = 3, backoff: float = 0.5) -> None:
         self._client = client
-        self._headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         self._retries = retries
         self._backoff = backoff
 
@@ -42,11 +41,15 @@ class HttpLlm:
             body["stream_options"] = {"include_usage": True}
         return body
 
-    async def _post(self, body: dict[str, Any]) -> httpx.Response:
+    @staticmethod
+    def _headers(api_key: str | None) -> dict[str, str]:
+        return {"Authorization": f"Bearer {api_key}"} if api_key else {}
+
+    async def _post(self, body: dict[str, Any], api_key: str | None) -> httpx.Response:
         last: Exception | None = None
         for attempt in range(self._retries + 1):
             try:
-                response = await self._client.post("/chat/completions", json=body, headers=self._headers)
+                response = await self._client.post("/chat/completions", json=body, headers=self._headers(api_key))
             except httpx.TransportError as exc:
                 last = exc
             else:
@@ -60,17 +63,25 @@ class HttpLlm:
         raise UpstreamUnavailable(f"upstream unreachable: {last}")
 
     @staticmethod
-    def _raise_for(response: httpx.Response) -> None:
-        if response.status_code >= 400:
-            try:
-                body = response.json()
-            except ValueError:
-                body = None
-            raise UpstreamRejected(response.status_code, body, response.text[:200])
+    def _rejection(status: int, raw: bytes, api_key: str | None) -> UpstreamRejected:
+        """The upstream's refusal, with the key removed from whatever it echoes back."""
+        text = raw.decode(errors="replace")
+        if api_key:
+            text = text.replace(api_key, "[removed]")
+        try:
+            body = json.loads(text)
+        except ValueError:
+            body = None
+        return UpstreamRejected(status, body, text[:200])
 
-    async def complete(self, request: LlmRequest) -> Completion:
-        response = await self._post(self._body(request, stream=False))
-        self._raise_for(response)
+    @classmethod
+    def _raise_for(cls, response: httpx.Response, api_key: str | None) -> None:
+        if response.status_code >= 400:
+            raise cls._rejection(response.status_code, response.content, api_key)
+
+    async def complete(self, request: LlmRequest, api_key: str | None = None) -> Completion:
+        response = await self._post(self._body(request, stream=False), api_key)
+        self._raise_for(response, api_key)
         data = response.json()
         choice = data["choices"][0]
         message = dict(choice["message"])
@@ -79,21 +90,16 @@ class HttpLlm:
                           usage=_usage(data.get("usage")), reasoning=reasoning or "",
                           system_fingerprint=data.get("system_fingerprint"))
 
-    async def stream(self, request: LlmRequest) -> AsyncIterator[LlmDelta]:
+    async def stream(self, request: LlmRequest, api_key: str | None = None) -> AsyncIterator[LlmDelta]:
         body = self._body(request, stream=True)
         for attempt in range(self._retries + 1):
             try:
-                async with self._client.stream("POST", "/chat/completions", json=body, headers=self._headers) as response:
+                async with self._client.stream("POST", "/chat/completions", json=body, headers=self._headers(api_key)) as response:
                     if response.status_code in TRANSIENT and attempt < self._retries:
                         await asyncio.sleep(self._backoff * (2**attempt))
                         continue
                     if response.status_code >= 400:
-                        raw = await response.aread()
-                        try:
-                            parsed = json.loads(raw)
-                        except ValueError:
-                            parsed = None
-                        raise UpstreamRejected(response.status_code, parsed, raw.decode(errors="replace")[:200])
+                        raise self._rejection(response.status_code, await response.aread(), api_key)
                     async for line in response.aiter_lines():
                         if not line.startswith("data:"):
                             continue

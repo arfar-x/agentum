@@ -295,7 +295,7 @@ def test_the_query_path_gets_a_short_explicit_list_and_no_env_file():
     assert "env_file" not in block, "an env file would hand the query path the owner and source credentials"
     environment = block.split("environment:", 1)[1].split("networks:", 1)[0]
     names = set(re.findall(r"^\s+([A-Z][A-Z0-9_]*):", environment, re.MULTILINE))
-    assert names == {"KB_DATABASE_URL", "KB_MCP_HOST", "KB_MCP_PORT"}
+    assert names == {"KB_DATABASE_URL", "KB_MCP_HOST", "KB_MCP_PORT", "KB_TRUST_SECRET"}
 
 
 def test_the_syncing_services_read_the_modules_env_file_only():

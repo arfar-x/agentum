@@ -4,6 +4,9 @@ servers:
   kb:
     url: http://mcp-kb:8322/mcp
     timeout: 30
+    # Send the caller's groups (X-KB-Groups) and the shared secret (X-KB-Trust, KB_TRUST_SECRET) to
+    # this server so it can hide restricted sources. Only servers that set this receive them.
+    forward_identity: true
   agent-skills:
     url: http://mcp-agent-skills-gateway:8321/mcp
     timeout: 90
@@ -11,14 +14,20 @@ servers:
     # A client tool whose name contains one of these words is treated as a stand-in for this
     # server's tools: it is withheld until the user agrees to use their client's own tools.
     client_terms: [jira, confluence, atlassian, gitlab, glab]
+    # Each variable the server accepts. A plain name also works (a secret, not required, labelled
+    # with its name). Secret values are never shown back in the portal; `secret: false` ones are.
     credentials:
-      - JIRA_BASE_URL
-      - JIRA_USERNAME
-      - JIRA_PASSWORD
-      - JIRA_DEFAULT_PROJECT
-      - CONFLUENCE_BASE_URL
-      - CONFLUENCE_USERNAME
-      - CONFLUENCE_PASSWORD
-      - CONFLUENCE_DEFAULT_SPACE
-      - GITLAB_BASE_URL
-      - GITLAB_TOKEN
+      - {name: JIRA_BASE_URL, label: Jira address, secret: false, required: true}
+      - {name: JIRA_USERNAME, label: Jira user name, secret: false, required: true}
+      - {name: JIRA_PASSWORD, label: Jira password or personal access token, secret: true, required: true}
+      - {name: JIRA_DEFAULT_PROJECT, label: Default Jira project key, secret: false}
+      - {name: CONFLUENCE_BASE_URL, label: Confluence address, secret: false}
+      - {name: CONFLUENCE_USERNAME, label: Confluence user name, secret: false}
+      - {name: CONFLUENCE_PASSWORD, label: Confluence password or personal access token, secret: true}
+      - {name: CONFLUENCE_DEFAULT_SPACE, label: Default Confluence space key, secret: false}
+      - {name: GITLAB_BASE_URL, label: GitLab address, secret: false}
+      - {name: GITLAB_TOKEN, label: GitLab personal access token, secret: true}
+    # A read-only tool the portal's "test" button calls with the person's own credentials.
+    test:
+      tool: jira_my_work
+      args: {}

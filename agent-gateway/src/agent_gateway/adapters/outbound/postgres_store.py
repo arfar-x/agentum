@@ -1,16 +1,31 @@
-"""Postgres: keys, encrypted credentials, threads and paused turns."""
+"""Postgres: keys, encrypted credentials, the directory copy, the audit log, threads and paused turns."""
 
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from psycopg import errors
+from psycopg.types.json import Jsonb
 from psycopg_pool import AsyncConnectionPool
 
-from agent_gateway.adapters.outbound.crypto import Vault, hash_key, new_api_key
+from agent_gateway.adapters.outbound.crypto import Vault
+from agent_gateway.application.audit import clean_detail, key_added_event, key_revoked_event
+from agent_gateway.application.identity_ports import Account, NewKey
 from agent_gateway.application.models import PendingTurn, Thread
+from agent_gateway.domain.identity import (
+    AuditEvent,
+    DirectoryEntry,
+    DuplicateKey,
+    KeyInfo,
+    clean_groups,
+    clean_roles,
+    scope_from_json,
+    scope_to_json,
+)
 from agent_gateway.domain.messages import ChatMessage, ToolCall
 
 
@@ -18,11 +33,113 @@ def _ts(epoch: float) -> datetime:
     return datetime.fromtimestamp(epoch, tz=timezone.utc)
 
 
+_KEY_COLUMNS = "id::text, owner, kind, label, prefix, scope, created_at, expires_at, revoked_at, last_used_at"
+
+
+def _key_info(row: tuple) -> KeyInfo:
+    return KeyInfo(id=row[0], owner=row[1], kind=row[2], label=row[3], prefix=row[4],
+                   scope=scope_from_json(row[5]), created_at=row[6], expires_at=row[7],
+                   revoked_at=row[8], last_used_at=row[9])
+
+
+def _cred_detail(actor: str, owner: str) -> dict[str, Any]:
+    return {} if actor == owner else {"owner": owner}
+
+
+async def _audit(conn: Any, actor: str, action: str, target: str = "", detail: dict | None = None) -> None:
+    """Write one audit row on an open connection, so a change and its entry share a transaction.
+    An identical event within a minute is folded into the earlier row."""
+    await conn.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", ("\x1f".join((actor, action, target)),))
+    folded = await (await conn.execute(
+        "UPDATE audit_log SET count = count + 1, last_ts = now() WHERE id = ("
+        "  SELECT id FROM audit_log WHERE actor=%s AND action=%s AND target=%s "
+        "  AND last_ts > now() - interval '60 seconds' ORDER BY id DESC LIMIT 1) RETURNING id",
+        (actor, action, target))).fetchone()
+    if folded is None:
+        await conn.execute(
+            "INSERT INTO audit_log (actor, action, target, detail) VALUES (%s,%s,%s,%s)",
+            (actor, action, target, Jsonb(clean_detail(detail))))
+
+
+class PostgresAudit:
+    """Implements ``AuditLog``."""
+
+    def __init__(self, pool: AsyncConnectionPool) -> None:
+        self._pool = pool
+
+    async def record(self, actor: str, action: str, target: str = "", detail: dict | None = None) -> None:
+        async with self._pool.connection() as conn:
+            await _audit(conn, actor, action, target, detail)
+
+    async def recent(self, limit: int = 50, *, actor: str | None = None, action: str | None = None,
+                     since: datetime | None = None) -> list[AuditEvent]:
+        async with self._pool.connection() as conn:
+            rows = await (await conn.execute(
+                "SELECT id, ts, last_ts, actor, action, target, detail, count FROM audit_log "
+                "WHERE (%s::text IS NULL OR actor=%s) AND (%s::text IS NULL OR action=%s) "
+                "AND (%s::timestamptz IS NULL OR last_ts >= %s) ORDER BY id DESC LIMIT %s",
+                (actor, actor, action, action, since, since, limit))).fetchall()
+        return [AuditEvent(*r) for r in rows]
+
+    async def prune(self, older_than: datetime) -> int:
+        async with self._pool.connection() as conn:
+            return (await conn.execute("DELETE FROM audit_log WHERE last_ts < %s", (older_than,))).rowcount
+
+
+class PostgresDirectory:
+    """Implements ``DirectoryStore``."""
+
+    def __init__(self, pool: AsyncConnectionPool) -> None:
+        self._pool = pool
+
+    async def lookup(self, user_id: str) -> DirectoryEntry | None:
+        async with self._pool.connection() as conn:
+            row = await (await conn.execute(
+                "SELECT user_id, username, groups, roles, enabled, synced_at, kind "
+                "FROM directory_snapshot WHERE user_id=%s", (user_id,))).fetchone()
+        if not row:
+            return None
+        return DirectoryEntry(row[0], row[1], tuple(row[2]), tuple(row[3]), row[4], row[5], row[6])
+
+    async def replace_all(self, accounts: Sequence[Account], synced_at: datetime) -> None:
+        async with self._pool.connection() as conn:
+            for a in accounts:
+                await conn.execute(
+                    "INSERT INTO directory_snapshot (user_id, username, kind, groups, roles, enabled, synced_at) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (user_id) DO UPDATE SET username=EXCLUDED.username, "
+                    "kind=EXCLUDED.kind, groups=EXCLUDED.groups, roles=EXCLUDED.roles, enabled=EXCLUDED.enabled, "
+                    "synced_at=EXCLUDED.synced_at",
+                    (a.sub, a.username, a.kind, list(clean_groups(a.groups)), list(clean_roles(a.roles)),
+                     a.enabled, synced_at))
+            await conn.execute("DELETE FROM directory_snapshot WHERE user_id <> ALL(%s::text[])",
+                               ([a.sub for a in accounts],))
+
+    async def newest_sync(self) -> datetime | None:
+        async with self._pool.connection() as conn:
+            row = await (await conn.execute("SELECT max(synced_at) FROM directory_snapshot")).fetchone()
+        return row[0]
+
+    async def list_all(self) -> list[DirectoryEntry]:
+        async with self._pool.connection() as conn:
+            rows = await (await conn.execute(
+                "SELECT user_id, username, groups, roles, enabled, synced_at, kind "
+                "FROM directory_snapshot ORDER BY username")).fetchall()
+        return [DirectoryEntry(r[0], r[1], tuple(r[2]), tuple(r[3]), r[4], r[5], r[6]) for r in rows]
+
+
 class PostgresStore:
-    """Implements ``ConversationStore``, ``CredentialStore`` and ``KeyStore`` plus the operator API."""
+    """Implements ``ConversationStore``, ``CredentialStore``, ``KeyRecords`` and ``OwnerPurge``;
+    ``audit`` and ``directory`` are the ``AuditLog`` and ``DirectoryStore`` over the same pool."""
 
     def __init__(self, pool: AsyncConnectionPool, vault: Vault) -> None:
         self._pool, self._vault = pool, vault
+        self.audit = PostgresAudit(pool)
+        self.directory = PostgresDirectory(pool)
+
+    @property
+    def box(self) -> Vault:
+        """The ``SecretBox`` this store encrypts with."""
+        return self._vault
 
     @classmethod
     async def open(cls, dsn: str, vault: Vault, migrations: Path) -> PostgresStore:
@@ -44,32 +161,65 @@ class PostgresStore:
                     await conn.execute(path.read_text(encoding="utf-8"))
                     await conn.execute("INSERT INTO schema_migrations VALUES (%s)", (path.name,))
 
-    # ---- KeyStore
+    # ---- KeyRecords
 
-    async def find_user(self, key_hash: str) -> tuple[str, str] | None:
+    async def add_key(self, new: NewKey, *, actor: str) -> tuple[KeyInfo, str | None]:
+        replaced: str | None = None
+        async with self._pool.connection() as conn:
+            if new.kind == "upstream":
+                row = await (await conn.execute(
+                    "UPDATE api_keys SET revoked_at = now(), secret_enc = NULL "
+                    "WHERE owner=%s AND kind='upstream' AND revoked_at IS NULL RETURNING id::text",
+                    (new.owner,))).fetchone()
+                replaced = row[0] if row else None
+            try:
+                row = await (await conn.execute(
+                    "INSERT INTO api_keys (owner, kind, label, prefix, key_hash, secret_enc, scope, expires_at) "
+                    f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING {_KEY_COLUMNS}",
+                    (new.owner, new.kind, new.label, new.prefix, new.key_hash, new.secret_enc,
+                     Jsonb(scope_to_json(new.scope)), new.expires_at))).fetchone()
+            except errors.UniqueViolation as exc:
+                if exc.diag.constraint_name == "api_keys_active_hash" or exc.diag.constraint_name is None:
+                    raise DuplicateKey("that key is already registered") from None
+                raise
+            info = _key_info(row)
+            await _audit(conn, actor, *key_added_event(info, replaced))
+        return info, replaced
+
+    async def find_active(self, key_hash: str, now: datetime) -> KeyInfo | None:
         async with self._pool.connection() as conn:
             row = await (await conn.execute(
-                "UPDATE api_keys SET last_used_at = now() WHERE key_hash=%s AND revoked_at IS NULL RETURNING id::text, user_id",
-                (key_hash,))).fetchone()
-        return (row[0], row[1]) if row else None
+                f"SELECT {_KEY_COLUMNS} FROM api_keys WHERE key_hash=%s AND revoked_at IS NULL "
+                "AND (expires_at IS NULL OR expires_at > %s)", (key_hash, now))).fetchone()
+        return _key_info(row) if row else None
 
-    async def create_key(self, user_id: str, label: str = "") -> str:
-        secret = new_api_key()
+    async def touch(self, key_id: str, now: datetime) -> None:
         async with self._pool.connection() as conn:
-            await conn.execute("INSERT INTO api_keys (user_id, label, key_hash) VALUES (%s,%s,%s)",
-                               (user_id, label, hash_key(secret)))
-        return secret
+            await conn.execute("UPDATE api_keys SET last_used_at=%s WHERE id=%s::uuid", (now, key_id))
 
-    async def list_keys(self) -> list[dict[str, Any]]:
+    async def upstream_secret(self, owner: str) -> bytes | None:
+        async with self._pool.connection() as conn:
+            row = await (await conn.execute(
+                "SELECT secret_enc FROM api_keys WHERE owner=%s AND kind='upstream' AND revoked_at IS NULL",
+                (owner,))).fetchone()
+        return bytes(row[0]) if row else None
+
+    async def list_for(self, owner: str) -> list[KeyInfo]:
         async with self._pool.connection() as conn:
             rows = await (await conn.execute(
-                "SELECT id::text, user_id, label, created_at, revoked_at, last_used_at FROM api_keys ORDER BY created_at")).fetchall()
-        return [dict(zip(("id", "user_id", "label", "created_at", "revoked_at", "last_used_at"), r)) for r in rows]
+                f"SELECT {_KEY_COLUMNS} FROM api_keys WHERE owner=%s ORDER BY created_at, id", (owner,))).fetchall()
+        return [_key_info(r) for r in rows]
 
-    async def revoke_key(self, key_id: str) -> bool:
+    async def revoke(self, owner: str | None, key_id: str, *, actor: str, by: str) -> bool:
         async with self._pool.connection() as conn:
-            cur = await conn.execute("UPDATE api_keys SET revoked_at = now() WHERE id::text=%s AND revoked_at IS NULL", (key_id,))
-            return cur.rowcount > 0
+            row = await (await conn.execute(
+                "UPDATE api_keys SET revoked_at = now(), "
+                "secret_enc = CASE WHEN kind='upstream' THEN NULL ELSE secret_enc END "
+                f"WHERE id=%s::uuid AND revoked_at IS NULL AND (%s::text IS NULL OR owner=%s) RETURNING {_KEY_COLUMNS}",
+                (key_id, owner, owner))).fetchone()
+            if row:
+                await _audit(conn, actor, *key_revoked_event(_key_info(row), by))
+        return row is not None
 
     # ---- CredentialStore
 
@@ -79,17 +229,68 @@ class PostgresStore:
                 "SELECT var, ciphertext FROM user_credentials WHERE user_id=%s AND server=%s", (user_id, server))).fetchall()
         return {var: self._vault.decrypt(ct).decode() for var, ct in rows}
 
-    async def set_credential(self, user_id: str, server: str, var: str, value: str) -> None:
+    async def list_vars(self, user: str, server: str) -> list[str]:
+        async with self._pool.connection() as conn:
+            rows = await (await conn.execute(
+                "SELECT var FROM user_credentials WHERE user_id=%s AND server=%s ORDER BY var", (user, server))).fetchall()
+        return [r[0] for r in rows]
+
+    async def list_credentials(self, user: str) -> list[tuple[str, str]]:
+        """(server, variable) for every stored value of one person; names only."""
+        async with self._pool.connection() as conn:
+            rows = await (await conn.execute(
+                "SELECT server, var FROM user_credentials WHERE user_id=%s ORDER BY server, var", (user,))).fetchall()
+        return [(r[0], r[1]) for r in rows]
+
+    async def set_credential(self, user_id: str, server: str, var: str, value: str, *, actor: str = "cli") -> None:
         async with self._pool.connection() as conn:
             await conn.execute(
                 "INSERT INTO user_credentials (user_id, server, var, ciphertext) VALUES (%s,%s,%s,%s) "
                 "ON CONFLICT (user_id, server, var) DO UPDATE SET ciphertext=EXCLUDED.ciphertext, updated_at=now()",
                 (user_id, server, var, self._vault.encrypt(value.encode())))
+            await _audit(conn, actor, "cred.set", f"{server}/{var}", _cred_detail(actor, user_id))
 
-    async def delete_credentials(self, user_id: str, server: str) -> int:
+    async def delete_var(self, user: str, server: str, var: str, *, actor: str = "cli") -> bool:
+        return bool(await self._delete_creds(user, server, var, actor))
+
+    async def delete_credentials(self, user_id: str, server: str, *, actor: str = "cli") -> int:
+        """Every stored variable of one server; returns how many."""
+        return len(await self._delete_creds(user_id, server, None, actor))
+
+    async def _delete_creds(self, user: str, server: str, var: str | None, actor: str) -> list[str]:
         async with self._pool.connection() as conn:
-            cur = await conn.execute("DELETE FROM user_credentials WHERE user_id=%s AND server=%s", (user_id, server))
-            return cur.rowcount
+            rows = await (await conn.execute(
+                "DELETE FROM user_credentials WHERE user_id=%s AND server=%s AND (%s::text IS NULL OR var=%s) "
+                "RETURNING var", (user, server, var, var))).fetchall()
+            for (name,) in rows:
+                await _audit(conn, actor, "cred.delete", f"{server}/{name}", _cred_detail(actor, user))
+        return [r[0] for r in rows]
+
+    async def stored_owners(self) -> list[str]:
+        """Every owner id that has keys, credentials, threads, pending turns or responses."""
+        async with self._pool.connection() as conn:
+            rows = await (await conn.execute(
+                "SELECT owner FROM api_keys UNION SELECT user_id FROM user_credentials "
+                "UNION SELECT user_id FROM threads UNION SELECT user_id FROM pending_turns "
+                "UNION SELECT user_id FROM responses ORDER BY 1")).fetchall()
+        return [r[0] for r in rows]
+
+    # ---- OwnerPurge
+
+    async def purge(self, owner: str) -> dict[str, int]:
+        statements = {
+            "keys": "DELETE FROM api_keys WHERE owner=%s",
+            "credentials": "DELETE FROM user_credentials WHERE user_id=%s",
+            "threads": "DELETE FROM threads WHERE user_id=%s",
+            "pending_turns": "DELETE FROM pending_turns WHERE user_id=%s",
+            "responses": "DELETE FROM responses WHERE user_id=%s",
+        }
+        counts: dict[str, int] = {}
+        async with self._pool.connection() as conn:
+            for name, sql in statements.items():
+                counts[name] = (await conn.execute(sql, (owner,))).rowcount
+            await _audit(conn, "cli", "owner.purge", owner, {"counts": counts})
+        return counts
 
     # ---- ConversationStore
 
@@ -174,3 +375,15 @@ class PostgresStore:
             await conn.execute("DELETE FROM pending_turns WHERE expires_at < %s", (_ts(now),))
             await conn.execute("DELETE FROM responses WHERE created_at < %s - make_interval(days => %s)", (_ts(now), retention_days))
             await conn.execute("DELETE FROM threads WHERE updated_at < %s - make_interval(days => %s)", (_ts(now), retention_days))
+
+
+async def read_directory_names(dsn: str) -> tuple[set[str], set[str]]:
+    """Every group and role in the directory copy. Read-only; used by ``check`` to catch typos."""
+    pool = AsyncConnectionPool(dsn, open=False, min_size=1, max_size=1)
+    await pool.open(wait=True, timeout=5)
+    try:
+        async with pool.connection() as conn:
+            rows = await (await conn.execute("SELECT groups, roles FROM directory_snapshot")).fetchall()
+    finally:
+        await pool.close()
+    return {g for r in rows for g in r[0]}, {x for r in rows for x in r[1]}

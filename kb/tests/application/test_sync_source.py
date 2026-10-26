@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from kb.domain.visibility import Caller
 from kb.application.ports.knowledge_source import SourceDocument
 from kb.application.use_cases.reconcile_document import ReconcileDocument
 from kb.application.use_cases.sync_source import Mode, SyncSource
@@ -119,7 +120,7 @@ def test_a_deletion_at_the_source_leaves_search_and_is_reported(wired):
 
     assert report.missing == 1, "reported, so an operator can see what vanished"
     assert store.entries["confluence-eng:2"].deleted_at is not None, "soft-deleted, not erased"
-    assert store.search("a page") == ["confluence-eng:1"]
+    assert store.search("a page", caller=Caller.operator_tool()) == ["confluence-eng:1"]
 
 
 def test_an_operators_correction_outlives_the_next_sync(wired):

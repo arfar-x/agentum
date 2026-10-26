@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import secrets
-
 from cryptography.fernet import Fernet, InvalidToken
 
 
@@ -25,10 +22,3 @@ class Vault:
         except InvalidToken as exc:  # noqa: TRY003
             raise ValueError("stored value cannot be decrypted with the configured key") from exc
 
-
-def hash_key(secret: str) -> str:
-    return hashlib.sha256(secret.encode()).hexdigest()
-
-
-def new_api_key() -> str:
-    return "agw_" + secrets.token_urlsafe(32)

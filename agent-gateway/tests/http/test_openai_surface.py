@@ -2,7 +2,7 @@
 
 import json
 
-from agent_gateway.adapters.outbound.crypto import hash_key
+from agent_gateway.domain.identity import hash_key
 from tests.application.fakes import agent
 from tests.conftest import completion
 
@@ -116,8 +116,8 @@ async def test_rate_limit_and_body_size_limits(make_gateway):
     assert (await gw.client.get("/v1/models", headers=gw.auth())).status_code == 200
     limited = await gw.client.get("/v1/models", headers=gw.auth())
     assert limited.status_code == 429 and limited.json()["error"]["code"] == "rate_limit_exceeded"
-    assert (await gw.client.get("/v1/models", headers=gw.auth("agw_other_key"))).status_code == 200   # other keys unaffected
-    big = await gw.client.post("/v1/chat/completions", headers=gw.auth("agw_other_key"),
+    assert (await gw.client.get("/v1/models", headers=gw.auth("agk_other_key"))).status_code == 200   # other keys unaffected
+    big = await gw.client.post("/v1/chat/completions", headers=gw.auth("agk_other_key"),
                                json={"model": "router", "messages": [{"role": "user", "content": "x" * 2000}]})
     assert big.status_code == 413
 

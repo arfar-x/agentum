@@ -52,8 +52,8 @@ services:
   # The knowledge catalog's MCP server: two read-only tools (kb_search, kb_get)
   # for the agents. Same isolation rule as mcp-agent-skills -- no published
   # port, backend network only, reachability from `api` is the access control.
-  # Unlike that server it takes no credentials at all: the catalog is shared, so
-  # there is nothing per-user for a caller to supply. It connects as kb_reader
+  # Unlike that server it takes no credentials: the catalog is shared. The one
+  # thing a caller may say is its groups, believed only with KB_TRUST_SECRET. It connects as kb_reader
   # (read-only, plus the gap log), never as the database owner, and it has no
   # `env_file:` -- so it cannot see the owner password or any source credential.
   mcp-kb:
@@ -68,6 +68,10 @@ services:
       KB_DATABASE_URL: postgresql://kb_reader:${KB_READER_PASSWORD:?set KB_READER_PASSWORD in kb/.env}@kb-db:5432/${KB_POSTGRES_DB:-agentflow_kb}
       KB_MCP_HOST: 0.0.0.0
       KB_MCP_PORT: "8322"
+      # Lets the agent gateway name the caller's groups (X-KB-Groups sent with X-KB-Trust equal to
+      # this). Empty: those headers are ignored and callers see unrestricted sources only. Given to
+      # no other kb service.
+      KB_TRUST_SECRET: ${KB_TRUST_SECRET:-}
     # gateway-kb lets the agent gateway (profile `gateway`) read the catalog
     # without joining `backend`. Harmless when the gateway is not running.
     networks: [backend, gateway-kb]
@@ -108,6 +112,8 @@ services:
     # summarizer endpoint, from the module's own env file.
     env_file: .env
     environment:
+      # Only mcp-kb gets the gateway trust secret (it is in kb/.env for it); the syncing roles do not.
+      KB_TRUST_SECRET: ""
       KB_DATABASE_URL: postgresql://${KB_POSTGRES_USER:-kb}:${KB_POSTGRES_PASSWORD:?set KB_POSTGRES_PASSWORD in kb/.env}@kb-db:5432/${KB_POSTGRES_DB:-agentflow_kb}
       KB_SOURCES_FILE: /opt/kb/config/sources.yaml
     # The summarizer calls the model endpoint, so this needs the same host pin
@@ -135,6 +141,8 @@ services:
         condition: service_healthy
     env_file: .env
     environment:
+      # Only mcp-kb gets the gateway trust secret (it is in kb/.env for it); the syncing roles do not.
+      KB_TRUST_SECRET: ""
       KB_DATABASE_URL: postgresql://${KB_POSTGRES_USER:-kb}:${KB_POSTGRES_PASSWORD:?set KB_POSTGRES_PASSWORD in kb/.env}@kb-db:5432/${KB_POSTGRES_DB:-agentflow_kb}
       KB_SOURCES_FILE: /opt/kb/config/sources.yaml
     extra_hosts:
@@ -162,6 +170,8 @@ services:
         condition: service_healthy
     env_file: .env
     environment:
+      # Only mcp-kb gets the gateway trust secret (it is in kb/.env for it); the syncing roles do not.
+      KB_TRUST_SECRET: ""
       KB_DATABASE_URL: postgresql://${KB_POSTGRES_USER:-kb}:${KB_POSTGRES_PASSWORD:?set KB_POSTGRES_PASSWORD in kb/.env}@kb-db:5432/${KB_POSTGRES_DB:-agentflow_kb}
       KB_SOURCES_FILE: /opt/kb/config/sources.yaml
       KB_WEBHOOK_HOST: 0.0.0.0

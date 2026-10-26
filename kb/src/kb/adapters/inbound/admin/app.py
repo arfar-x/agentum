@@ -52,6 +52,7 @@ from kb.domain.content import DEFAULT_RAW_CONTENT_MAX_BYTES
 from kb.domain.entry import EntryType
 from kb.domain.identity import entry_id_for
 from kb.domain.runs import RunStatus
+from kb.domain.visibility import Caller
 from kb.sources_config import FORM_SOURCE_ID, ConfigError, SourcesConfig, load
 
 logger = logging.getLogger("kb.admin")
@@ -729,7 +730,7 @@ def build_app(
         record = services.forms.get(slug)
         if record is None:
             return _error(404, "not_found", "no such record")
-        view = services.get_entry.execute(entry_id_for(FORM_SOURCE_ID, slug), offset=offset)
+        view = services.get_entry.execute(entry_id_for(FORM_SOURCE_ID, slug), offset=offset, caller=Caller.operator_tool())
         return _json(
             {
                 "slug": slug,

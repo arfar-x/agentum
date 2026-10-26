@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Model key{% endblock %}
+{% block content %}
+<h1>My model key</h1>
+<p>The key you register here is used for the language-model calls made on your behalf. It is write-only: it is never shown again.</p>
+{% if key %}
+<dl>
+  <dt>Label</dt><dd>{{ key.label or "none" }}</dd>
+  <dt>Key</dt><dd>ends in ...{{ key.prefix }}</dd>
+  <dt>Registered</dt><dd>{{ key.created_at.strftime("%Y-%m-%d %H:%M") }} UTC</dd>
+  <dt>Last used</dt><dd>{{ key.last_used_at.strftime("%Y-%m-%d %H:%M") ~ " UTC" if key.last_used_at else "never" }}</dd>
+</dl>
+{% else %}
+<p>You have no model key registered.</p>
+{% endif %}
+<h2>{{ "Replace the key" if key else "Register a key" }}</h2>
+<form method="post" action="/portal/key">
+  <input type="hidden" name="csrf" value="{{ session.csrf }}">
+  <label for="label">Label (optional)</label>
+  <input id="label" name="label" maxlength="64" autocomplete="off">
+  <label for="secret">Key</label>
+  <input id="secret" name="secret" type="password" autocomplete="off" required minlength="8" maxlength="512">
+  <button type="submit">{{ "Replace" if key else "Register" }}</button>
+</form>
+{% if key %}
+<h2>Revoke</h2>
+<form method="post" action="/portal/key/revoke">
+  <input type="hidden" name="csrf" value="{{ session.csrf }}">
+  <button type="submit" class="danger">Revoke my key</button>
+</form>
+{% endif %}
+{% endblock %}

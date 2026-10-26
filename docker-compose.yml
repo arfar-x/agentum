@@ -399,6 +399,9 @@ services:
         condition: service_healthy
       mcp-agent-skills-gateway:
         condition: service_healthy
+    # Identity (OIDC_*, DIRECTORY_*, PORTAL_*, KB_TRUST_SECRET, GATEWAY_ISSUE_KEYS) is read from
+    # .env.agent-gateway; see docs/KEYCLOAK.md. The gateway reaches the identity provider by its
+    # public URL over the default bridge; it never needs `backend` for that.
     env_file:
       - path: .env.agent-gateway
         required: false

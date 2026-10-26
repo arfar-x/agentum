@@ -89,6 +89,10 @@ class Settings(BaseModel):
     #: scheduled time of day: `at: "03:00"` means 03:00 here, not 03:00 UTC.
     #: Everything else compares instants and is unaffected.
     timezone: str = "UTC"
+    #: Shared with the agent gateway. A request carrying it may name the
+    #: caller's groups (`X-KB-Groups`); without it, or with it unset, every
+    #: caller sees unrestricted sources only (spec FR-VIS-10/11).
+    trust_secret: str | None = None
 
     @field_validator("summarizer_url")
     @classmethod
@@ -159,6 +163,7 @@ class Settings(BaseModel):
             ("summarizer_api_key", "KB_SUMMARIZER_API_KEY"),
             ("summary_languages", "KB_SUMMARY_LANGUAGES"),
             ("timezone", "KB_TIMEZONE"),
+            ("trust_secret", "KB_TRUST_SECRET"),
         ):
             raw = source.get(variable)
             if raw not in (None, ""):

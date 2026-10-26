@@ -43,6 +43,20 @@ before issuing a key when the code is unknown. If the code expires between the c
 issued key stays active; revoke it with `make gateway-key-revoke KEY_ID=...`. `telegram-unlink` removes the
 link and the user's sessions but not their gateway key.
 
+## Linking modes
+
+`LINK_MODE` in `integrations/telegram-bot/.env` picks how a Telegram account is tied to a person:
+
+- `pairing` (default): the bot shows a code, an operator approves it with `make telegram-pair` and the bot
+  keeps a gateway-issued key. Needs `GATEWAY_ISSUE_KEYS=true` on the gateway.
+- `device` (recommended): the person sends `/login`, approves a code at the identity provider, and the bot
+  stores only their refresh token. The gateway then sees who they are (their groups and roles) on every
+  message, and disabling the account in the identity provider cuts the bot off. Set `OIDC_ISSUER` to the
+  realm address (`https://<keycloak-host>/realms/agentflow`); `OIDC_CLIENT_ID` is `telegram-bot`, a public
+  client the realm provides (`make idp-realm-apply`; see [`docs/KEYCLOAK.md`](../../docs/KEYCLOAK.md)).
+  There is no `telegram-pair` step. Available after the bot's device sign-in and the gateway's token
+  support are merged (specs/003-identity-access).
+
 ## Database role
 
 `setup-db.sh` creates the role `telegram_bot` and the database `telegram_bot` on the gateway's Postgres,

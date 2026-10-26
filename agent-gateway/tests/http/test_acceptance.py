@@ -80,7 +80,7 @@ async def test_as05_a_model_that_calls_an_unknown_tool_still_yields_one_correct_
 async def test_credentials_never_reach_the_model_the_response_or_the_logs(make_gateway, caplog):
     gw = await make_gateway([agent("router", tools=TOOLS)], specs=JIRA)
 
-    async def leaky(server, tool, arguments, credentials):
+    async def leaky(server, tool, arguments, credentials, *, identity=None):
         gw.tools.calls.append((server, tool, arguments, credentials))
         return ToolResult(f"echo: {credentials['JIRA_USER']}")
 
@@ -100,7 +100,7 @@ async def test_slow_gateway_tools_keep_the_stream_alive(make_gateway, monkeypatc
     monkeypatch.setattr(chat, "KEEPALIVE_SECONDS", 0.05)
     gw = await make_gateway([agent("router", tools=TOOLS)], specs=JIRA)
 
-    async def slow(server, tool, arguments, credentials):
+    async def slow(server, tool, arguments, credentials, *, identity=None):
         await asyncio.sleep(0.3)
         return ToolResult("found")
 

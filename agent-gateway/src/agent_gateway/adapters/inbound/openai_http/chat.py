@@ -15,11 +15,13 @@ from pydantic import ValidationError
 
 from agent_gateway.adapters.inbound.openai_http import wire
 from agent_gateway.adapters.inbound.openai_http.auth import Caller, authenticate
+from agent_gateway.adapters.inbound.openai_http.principal import principal_of
 from agent_gateway.adapters.inbound.openai_http.proxy import forward
 from agent_gateway.application.events import ContentDelta, Done, Event, ReasoningDelta, ToolCallsOut
 from agent_gateway.application.models import TurnRequest
 from agent_gateway.application.use_cases.run_turn import run_turn
 from agent_gateway.domain.errors import GatewayError, InvalidRequest
+from agent_gateway.domain.identity import Principal
 from agent_gateway.domain.messages import ChatMessage, ToolCall, ToolDef, Usage
 from agent_gateway.domain.params import TUNABLE, check_supported
 from agent_gateway.domain.routing import parse_route
@@ -49,7 +51,7 @@ def request_vars(headers, servers) -> dict[str, dict[str, str]]:
     return out
 
 
-def build_turn(body: dict[str, Any], route, caller: Caller, request: Request) -> TurnRequest:
+def build_turn(body: dict[str, Any], route, caller: Caller, principal: Principal, request: Request) -> TurnRequest:
     container = request.app.state.container
     try:
         messages = [ChatMessage.model_validate(m) for m in body.get("messages") or []]
@@ -59,7 +61,7 @@ def build_turn(body: dict[str, Any], route, caller: Caller, request: Request) ->
     if not messages:
         raise InvalidRequest("'messages' must contain at least one message.", param="messages")
     return TurnRequest(
-        user_id=caller.user_id, agent_id=route.agent_id, upstream_model=route.upstream_model, messages=messages,
+        principal=caller, agent_id=route.agent_id, upstream_model=route.upstream_model, messages=messages,
         client_tools=tools, params={k: body[k] for k in TUNABLE if k in body}, stream=bool(body.get("stream")),
         request_vars=request_vars(request.headers, container.config.servers))
 
@@ -75,11 +77,12 @@ async def chat_completions(request: Request, caller: Caller = Depends(authentica
         model = body["model"]
     except (ValueError, KeyError, TypeError) as exc:
         raise InvalidRequest("Request body must be JSON with a 'model'.", param="model") from exc
-    route = parse_route(str(model), container.config.agents)
+    principal = principal_of(request, caller)
+    route = parse_route(str(model), container.config.agents, principal)
     if route.kind == "passthrough":
-        return await forward(request, "chat/completions", raw)
+        return await forward(request, "chat/completions", caller, raw)
     check_supported(body)
-    turn = build_turn(body, route, caller, request)
+    turn = build_turn(body, route, caller, principal, request)
     deps_for = lambda sink: dataclasses.replace(container.deps, sink=sink)  # noqa: E731
     include_usage = bool((body.get("stream_options") or {}).get("include_usage"))
     if turn.stream:

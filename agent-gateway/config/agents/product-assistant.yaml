@@ -5,6 +5,11 @@ description: The product team's front door — routes to Plan, Doc Gen, Prepare 
   Tasks, or Docs depending on the request, and answers quick Jira/Confluence lookups directly without
   spinning up a specialist.
 model: ${DEFAULT_MODEL}
+# Restrict who may use this agent (absent = every signed-in person). Names come from the identity provider.
+# access:
+#   groups: [product, engineering]
+#   roles: [agent-user]
+#   write_groups: [leads]
 model_parameters:
   temperature: 0.99
   reasoning_effort: low

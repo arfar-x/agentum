@@ -28,7 +28,7 @@ async def test_the_next_turn_is_told_what_the_gateway_ran_before():
 async def test_a_failed_call_is_recorded_as_failed_and_results_are_never_stored():
     r = kb_rig(call(("kb_search", {"queries": ["cto"]})), say("Could not search."), say("ok"),
                results={})
-    async def failing(server, tool, arguments, credentials):
+    async def failing(server, tool, arguments, credentials, *, identity=None):
         return ToolResult("SECRET-RESULT-TEXT", is_error=True)
     r.tools.call = failing
     await r.turn([user("who")])
@@ -39,7 +39,7 @@ async def test_a_failed_call_is_recorded_as_failed_and_results_are_never_stored(
 
 async def test_a_catalog_lookup_before_the_answer_is_recorded():
     class Retriever:
-        async def search(self, queries, limit, types):
+        async def search(self, queries, limit, types, *, identity=None):
             return [{"title": {"en": "a"}, "summary": {"en": "b"}, "type": "doc", "id": "form:cto"}]
 
     r = rig(say("answer"), say("later"), agents=[agent(preretrieval=KB)], retriever=Retriever())

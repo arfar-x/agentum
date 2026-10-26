@@ -24,6 +24,7 @@ from kb.domain.merge import apply_override
 from kb.domain.policies import DEFAULT_STALE_AFTER, is_indexable, is_stale
 from kb.domain.ranking import reciprocal_rank_fusion
 from kb.domain.text import normalize
+from kb.domain.visibility import Caller
 
 #: How many candidates to pull per query before fusing. Wider than the caller's
 #: limit on purpose: an entry ranked 9th by one query and 2nd by another should
@@ -83,7 +84,10 @@ class SearchCatalog:
         types: Sequence[EntryType] | None = None,
         tags: Sequence[str] | None = None,
         limit: int | None = None,
+        caller: Caller | None = None,
     ) -> SearchResult:
+        # No caller means no group information: unrestricted sources only.
+        caller = caller or Caller.anonymous()
         limit = limit or self._default_limit
         now = self._clock.now()
 
@@ -99,7 +103,7 @@ class SearchCatalog:
 
         candidates = max(MIN_CANDIDATES, limit * CANDIDATE_MULTIPLIER)
         rankings = [
-            self._store.search(query, types=types, tags=tags, limit=candidates)
+            self._store.search(query, types=types, tags=tags, limit=candidates, caller=caller)
             for query in normalized
         ]
         fused = reciprocal_rank_fusion(rankings)

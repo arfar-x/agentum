@@ -77,6 +77,8 @@ def test_a_record_reaches_the_searchable_catalog_with_its_text_readable_by_page(
 
     clock = SystemClock(timezone.utc)
     forms.create(record(), at=T0)
+    # What the scheduler does before any run: the source's visibility row.
+    store.apply_visibility({"form": ()}, at=T0)
     reconcile = ReconcileDocument(store, PresetSummarizer(NullSummarizer()), clock)
     sync = SyncSource(store, reconcile, clock)
 

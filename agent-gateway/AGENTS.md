@@ -17,8 +17,13 @@ python -m pytest                 # unit, application, HTTP and SDK-conformance t
 scripts/test-services.sh         # also the Postgres/Redis tests, in throwaway containers
 python -m agent_gateway check    # validate config/ and the environment
 python -m agent_gateway serve    # run the server
-python -m agent_gateway key create alice@example.org
-python -m agent_gateway creds set alice@example.org agent-skills JIRA_PASSWORD
+python -m agent_gateway key register-llm --owner <sub>   # model key from stdin
+python -m agent_gateway key create --owner <sub>         # only with GATEWAY_ISSUE_KEYS=true
+python -m agent_gateway key list --owner <sub>
+python -m agent_gateway creds set --owner <sub> agent-skills JIRA_PASSWORD   # value from stdin
+python -m agent_gateway audit list --since 1d
+python -m agent_gateway directory sync|show|orphans   # the copy of the identity provider's people
+python -m agent_gateway owner purge --owner <sub> --yes
 ```
 
 ## Architecture
@@ -26,7 +31,7 @@ python -m agent_gateway creds set alice@example.org agent-skills JIRA_PASSWORD
 Hexagonal, like a small `kb`:
 
 - `domain/` pure rules: routing, parameter merge, tool routing, approval codes, history hashing,
-  corrections, prompts.
+  corrections, prompts, identity (principal, keys, names).
 - `application/` ports (`ports.py`), the turn logic as small nodes (`turn.py`) and use cases.
   No I/O, no web framework, no agent-runtime library: `tests/test_boundaries.py` enforces it.
 - `adapters/inbound/` the OpenAI HTTP surface (FastAPI) and the CLI.

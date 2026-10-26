@@ -1,4 +1,4 @@
-# Covers: FR-MEM-03, FR-OPS-04, FR-AUT-02, FR-AUT-03, FR-AUT-04, FR-CRD-02, FR-CRD-03, FR-OPS-01, FR-OPS-02, FR-OPS-03
+# Covers: FR-MEM-03, FR-AUT-04, FR-CRD-02, FR-CRD-03, FR-OPS-01, FR-OPS-02, FR-OPS-03
 
 import asyncio
 import os
@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import redis.asyncio as aioredis
 
-from agent_gateway.adapters.outbound.crypto import Vault, hash_key
+from agent_gateway.adapters.outbound.crypto import Vault
 from agent_gateway.adapters.outbound.postgres_store import PostgresStore
 from agent_gateway.adapters.outbound.redis_locks import LockTimeout, RedisLock, RedisRateLimiter
 from agent_gateway.application.models import PendingTurn, Thread
@@ -25,7 +25,7 @@ async def store():
         pytest.skip("no test database (run scripts/test-services.sh)")
     s = await PostgresStore.open(DSN, Vault(Vault.generate_key()), MIGRATIONS)
     async with s._pool.connection() as c:
-        await c.execute("TRUNCATE api_keys, user_credentials, threads, pending_turns CASCADE")
+        await c.execute("TRUNCATE api_keys, user_credentials, threads, pending_turns, audit_log, directory_snapshot CASCADE")
     yield s
     await s.close()
 
@@ -37,18 +37,6 @@ def pending(user="u1", **kw):
                 code_hash="h", expires_at=2000.0)
     base.update(kw)
     return PendingTurn(**base)
-
-
-async def test_keys_are_hashed_shown_once_and_revocation_is_immediate(store):
-    secret = await store.create_key("alice", "laptop")
-    assert await store.find_user(hash_key("wrong")) is None
-    key_id, user = await store.find_user(hash_key(secret))
-    assert user == "alice"
-    async with store._pool.connection() as c:
-        row = await (await c.execute("SELECT key_hash FROM api_keys")).fetchone()
-    assert secret not in row[0] and row[0] == hash_key(secret)
-    assert await store.revoke_key(key_id)
-    assert await store.find_user(hash_key(secret)) is None
 
 
 async def test_credentials_are_encrypted_at_rest_and_scoped_to_their_owner(store):
@@ -130,45 +118,6 @@ async def test_the_redis_lock_serializes_and_the_rate_limit_counts():
     limiter = RedisRateLimiter(r)
     assert [await limiter.allow("k", 2) for _ in range(3)] == [True, True, False]
     await r.aclose()
-
-
-async def test_the_cli_creates_lists_and_revokes_keys_and_manages_credentials(store, monkeypatch, capsys):
-    # Covers: FR-OPS-04
-    import io
-
-    from agent_gateway.adapters.inbound.cli import parser, run
-
-    class Keep:
-        """Lets the CLI close its store without closing the shared test one."""
-
-        def __getattr__(self, name):
-            return getattr(store, name)
-
-        async def close(self):
-            pass
-
-    async def opener():
-        return Keep()
-
-    async def cli(*argv):
-        out = io.StringIO()
-        code = await run(parser().parse_args(argv), opener, out)
-        return code, out.getvalue()
-
-    code, text = await cli("key", "create", "carol", "--label", "laptop")
-    secret = text.splitlines()[0]
-    assert code == 0 and secret.startswith("agw_")
-    assert await store.find_user(hash_key(secret)) is not None
-    _, listing = await cli("key", "list")
-    assert "carol" in listing and "active" in listing
-    key_id = (await store.find_user(hash_key(secret)))[0]
-    assert (await cli("key", "revoke", key_id))[0] == 0
-    assert await store.find_user(hash_key(secret)) is None
-    assert (await cli("key", "revoke", key_id))[0] == 1
-    monkeypatch.setenv("TMP_VALUE", "pw")
-    await cli("creds", "set", "carol", "skills", "JIRA_PASSWORD", "--value-env", "TMP_VALUE")
-    assert await store.get("carol", "skills") == {"JIRA_PASSWORD": "pw"}
-    assert "deleted 1" in (await cli("creds", "delete", "carol", "skills"))[1]
 
 
 async def test_the_text_cache_expires_and_renews_on_use():

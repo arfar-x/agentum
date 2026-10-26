@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="same-origin">
+<title>{% block title %}Portal{% endblock %} - Agent gateway</title>
+<link rel="stylesheet" href="/portal/static/portal.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header>
+  <span class="brand">Agent gateway</span>
+  {% if session %}
+  <nav aria-label="Portal">
+    <a href="/portal/key"{% if nav == '/portal/key' %} aria-current="page"{% endif %}>Model key</a>
+    <a href="/portal/credentials"{% if nav == '/portal/credentials' %} aria-current="page"{% endif %}>Tool credentials</a>
+    {% if issue_keys %}<a href="/portal/issued"{% if nav == '/portal/issued' %} aria-current="page"{% endif %}>Issued keys</a>{% endif %}
+    <a href="/portal/activity"{% if nav == '/portal/activity' %} aria-current="page"{% endif %}>Recent activity</a>
+  </nav>
+  <form method="post" action="/portal/logout" class="who">
+    <input type="hidden" name="csrf" value="{{ session.csrf }}">
+    <span>{{ session.username }}</span>
+    <button type="submit" class="link">Sign out</button>
+  </form>
+  {% endif %}
+</header>
+<main id="main">
+{% if flash %}<p class="flash" role="status">{{ flash }}</p>{% endif %}
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+{% block content %}{% endblock %}
+</main>
+</body>
+</html>

@@ -63,7 +63,7 @@ def test_broken_yaml_names_the_file(tmp_path):
 
 def llm(handler, retries=2):
     client = httpx.AsyncClient(base_url="http://up/v1", transport=httpx.MockTransport(handler))
-    return HttpLlm(client, api_key="k", retries=retries, backoff=0)
+    return HttpLlm(client, retries=retries, backoff=0)
 
 
 REQ = LlmRequest(model="m", messages=[ChatMessage(role="user", content="hi")], tools=[], params={"temperature": 0.1})
@@ -77,7 +77,7 @@ async def test_complete_parses_message_usage_and_reasoning():
         return httpx.Response(200, json={"choices": [{"message": {"role": "assistant", "content": "yo", "reasoning_content": "hmm"},
                                                      "finish_reason": "stop"}], "usage": {"prompt_tokens": 3, "completion_tokens": 1, "total_tokens": 4}})
 
-    c = await llm(handler).complete(REQ)
+    c = await llm(handler).complete(REQ, "k")
     assert (c.message.text(), c.reasoning, c.usage.total_tokens) == ("yo", "hmm", 4)
     assert seen["auth"] == "Bearer k" and seen["body"]["temperature"] == 0.1 and "tools" not in seen["body"]
 

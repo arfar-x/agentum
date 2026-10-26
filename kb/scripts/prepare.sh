@@ -155,3 +155,27 @@ if [ "${1:-}" = "--admin" ]; then
     fi
   done
 fi
+
+# --- 4. The trust secret shared with the agent gateway -------------------------
+# mcp-kb believes the group names the gateway forwards only when the request carries this value
+# (specs/003-identity-access: X-KB-Trust). The same value must be in kb/.env (KB_TRUST_SECRET, given
+# to mcp-kb alone) and in .env.agent-gateway. Generated once, here, and copied to the gateway's file
+# when that exists and has none; a value already set on either side is kept and shared, never
+# replaced. Runs on every call so an existing deployment gets one too.
+GATEWAY_ENV="${KB_GATEWAY_ENV:-.env.agent-gateway}"
+trust="$(env_get KB_TRUST_SECRET "${KB_ENV}")"
+if [ -z "${trust}" ] && [ -f "${GATEWAY_ENV}" ]; then
+  trust="$(env_get KB_TRUST_SECRET "${GATEWAY_ENV}")"
+  [ -z "${trust}" ] || say "took KB_TRUST_SECRET from ${GATEWAY_ENV}"
+fi
+if [ -z "${trust}" ]; then
+  trust="$(openssl rand -hex 32)"
+  say "generated KB_TRUST_SECRET"
+fi
+if [ -z "$(env_get KB_TRUST_SECRET "${KB_ENV}")" ]; then
+  set_var KB_TRUST_SECRET "${trust}" "${KB_ENV}"
+fi
+if [ -f "${GATEWAY_ENV}" ] && [ -z "$(env_get KB_TRUST_SECRET "${GATEWAY_ENV}")" ]; then
+  set_var KB_TRUST_SECRET "${trust}" "${GATEWAY_ENV}"
+  say "copied KB_TRUST_SECRET to ${GATEWAY_ENV}"
+fi

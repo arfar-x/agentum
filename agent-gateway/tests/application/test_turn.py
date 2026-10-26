@@ -13,7 +13,7 @@ class Retriever:
     def __init__(self, hits=None, fail=False):
         self.hits, self.fail, self.queries = hits or [], fail, []
 
-    async def search(self, queries, limit, types):
+    async def search(self, queries, limit, types, *, identity=None):
         self.queries.append(queries)
         if self.fail:
             raise RuntimeError("catalog down")

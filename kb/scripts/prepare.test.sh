@@ -94,4 +94,22 @@ mkdir kb/config/sources.yaml
 bash kb/scripts/prepare.sh >/dev/null
 check "empty mountpoint directory replaced by the file" "yes" "$([ -f kb/config/sources.yaml ] && echo yes)"
 
+# --- the trust secret shared with the gateway ---------------------------------
+fresh
+bash kb/scripts/prepare.sh >/dev/null
+check "trust secret generated" "64" "$(kb KB_TRUST_SECRET | wc -c | tr -d ' ')"
+trust="$(kb KB_TRUST_SECRET)"
+bash kb/scripts/prepare.sh >/dev/null
+check "a rerun keeps the trust secret" "${trust}" "$(kb KB_TRUST_SECRET)"
+check "no gateway file is created" "no" "$([ -e .env.agent-gateway ] && echo yes || echo no)"
+printf 'CREDS_KEY=x\nKB_TRUST_SECRET=\n' > .env.agent-gateway
+bash kb/scripts/prepare.sh >/dev/null
+check "empty gateway value gets the kb value" "${trust}" "$(env_get KB_TRUST_SECRET .env.agent-gateway)"
+check "other gateway lines untouched" "x" "$(env_get CREDS_KEY .env.agent-gateway)"
+fresh
+printf 'KB_TRUST_SECRET=fromgateway\n' > .env.agent-gateway
+bash kb/scripts/prepare.sh >/dev/null
+check "kb adopts a value the gateway already has" "fromgateway" "$(kb KB_TRUST_SECRET)"
+check "the gateway's value is kept" "fromgateway" "$(env_get KB_TRUST_SECRET .env.agent-gateway)"
+
 exit "${fail}"
