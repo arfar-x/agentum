@@ -12,6 +12,7 @@ only when `PORTAL_BASE_URL` is set; otherwise every `/portal/*` path is 404. Con
 | `PORTAL_BASE_URL` | Public origin, `https://...` (`http://localhost[:port]` is accepted for local use; the cookie's `Secure` flag is dropped only then). No path. |
 | `PORTAL_SESSION_SECRET` | At least 32 bytes. Signs the `portal_session` and `portal_login` cookies; changing it ends every session. |
 | `GATEWAY_ISSUE_KEYS` | The issued-keys page exists only when this is true. |
+| `GATEWAY_MODEL_KEY_LOGIN` | `off`, `read-only` (default) or `full`: shapes the wording of the model-key page about the key acting as a login. |
 
 Sign-in goes through the provider-neutral `PortalLogin` port (authorization code flow with PKCE
 S256, state and nonce kept in the signed `portal_login` cookie). The portal itself reads no

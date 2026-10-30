@@ -9,13 +9,13 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from agent_gateway.domain.errors import ConfigError
+from agent_gateway.domain.identity import MODEL_KEY_LOGIN_MODES
 
 
 @dataclass(frozen=True)
 class EnvSettings:
     config_dir: Path
     upstream_base_url: str
-    upstream_api_key: str
     database_url: str
     redis_url: str
     creds_key: str
@@ -25,6 +25,7 @@ class EnvSettings:
     host: str = "0.0.0.0"
     port: int = 8080
     issue_keys: bool = False
+    model_key_login: str = "read-only"
     audit_retention_days: int = 365
     portal_base_url: str = ""
     portal_session_secret: str = ""
@@ -49,7 +50,6 @@ class EnvSettings:
         return cls(
             config_dir=Path(env.get("GATEWAY_CONFIG_DIR", "config")),
             upstream_base_url=env["UPSTREAM_BASE_URL"].rstrip("/"),
-            upstream_api_key=env.get("UPSTREAM_API_KEY", ""),
             database_url=env["DATABASE_URL"],
             redis_url=env["REDIS_URL"],
             creds_key=env["CREDS_KEY"],
@@ -59,6 +59,7 @@ class EnvSettings:
             host=env.get("GATEWAY_HOST", "0.0.0.0"),
             port=int(env.get("GATEWAY_PORT", "8080")),
             issue_keys=_flag(env, "GATEWAY_ISSUE_KEYS"),
+            model_key_login=_model_key_login(env),
             audit_retention_days=_positive_int(env, "AUDIT_RETENTION_DAYS", 365),
             portal_base_url=_portal_base_url(env),
             portal_session_secret=_portal_secret(env),
@@ -68,6 +69,13 @@ class EnvSettings:
             environ=dict(env),
             kb_trust_secret=env.get("KB_TRUST_SECRET", ""),
         )
+
+
+def _model_key_login(env: Mapping[str, str]) -> str:
+    raw = (env.get("GATEWAY_MODEL_KEY_LOGIN") or "").strip().lower() or "read-only"
+    if raw not in MODEL_KEY_LOGIN_MODES:
+        raise ConfigError("GATEWAY_MODEL_KEY_LOGIN must be off, read-only or full")
+    return raw
 
 
 def _flag(env: Mapping[str, str], name: str) -> bool:

@@ -1,5 +1,5 @@
 # Covers: FR-PRT-01, FR-PRT-02, FR-PRT-03, FR-PRT-04, FR-PRT-05, FR-PRT-06, FR-PRT-07, FR-PRT-08
-# Covers: FR-PRT-09, FR-PRT-10, FR-PRT-11, FR-PRT-12, FR-CRD-08
+# Covers: FR-PRT-09, FR-PRT-10, FR-PRT-11, FR-PRT-12, FR-PRT-13, FR-CRD-08
 """The portal, driven over real HTTP (ASGI, no network) against in-memory fakes."""
 
 from __future__ import annotations
@@ -69,7 +69,7 @@ class Rig:
         return httpx.AsyncClient(transport=httpx.ASGITransport(app=self.app), base_url=BASE)
 
 
-def make_rig(*, issue_keys: bool = False, base: str = BASE) -> Rig:
+def make_rig(*, issue_keys: bool = False, base: str = BASE, model_key_login: str = "read-only") -> Rig:
     now = FakeNow()
     audit = FakeAudit(now)
     records = FakeKeyRecords(audit, now)
@@ -90,7 +90,7 @@ def make_rig(*, issue_keys: bool = False, base: str = BASE) -> Rig:
     keys = KeyManager(records, FakeSecretBox(), issue_keys=issue_keys, now=now)
     deps = PortalDeps(base_url=base, session_secret=SECRET, login=login, directory=directory, keys=keys,
                       audit=audit, creds=creds, tools=tools, servers=servers, issue_keys=issue_keys,
-                      agent_ids=lambda entry: ["alpha", "beta"], now=now)
+                      model_key_login=model_key_login, agent_ids=lambda entry: ["alpha", "beta"], now=now)
 
     async def close():
         return None
@@ -241,7 +241,7 @@ async def test_the_model_key_can_be_registered_replaced_and_revoked_and_is_never
         assert len([k for k in await rig.records.list_for(SUB) if k.revoked_at is None]) == 1
         await rig.deps.keys.register_upstream("someone-else", "", "sk-taken-by-another-1")
         dup = await c.post("/portal/key", headers=post_headers(), content=form("sk-taken-by-another-1"))
-        assert dup.status_code == 409 and "someone" not in dup.text and "sk-taken" not in dup.text
+        assert dup.status_code == 303 and "someone" not in dup.text and "sk-taken" not in dup.text   # FR-KEY-03: nothing to learn
         assert (await c.post("/portal/key", headers=post_headers(), content=form("short"))).status_code == 400
         assert (await c.post("/portal/key", headers=post_headers(), content=form("has space1234"))).status_code == 400
         assert (await c.post("/portal/key/revoke", headers=post_headers(), content=f"csrf={token}")).status_code == 303
@@ -386,3 +386,22 @@ async def test_the_directory_is_refreshed_once_for_an_unknown_person(rig):
     async with rig.client() as c:
         assert (await sign_in(c, "code-gone")).status_code == 303
     assert len(calls) == 1
+
+
+async def test_the_key_page_explains_use_login_and_sharing_for_each_mode(rig):
+    c, _ = await signed_in(rig)
+    async with closing(c):
+        text = " ".join((await c.get("/portal/key")).text.split())
+        assert "used to call the model" in text
+        assert "only if nobody else registered the same string" in text and "read-only" in text
+        assert "stops working as a login" in text
+    full = make_rig(model_key_login="full")
+    c, _ = await signed_in(full)
+    async with closing(c):
+        text = " ".join((await c.get("/portal/key")).text.split())
+        assert "only if nobody else registered the same string" in text and "read-only use" not in text
+    off = make_rig(model_key_login="off")
+    c, _ = await signed_in(off)
+    async with closing(c):
+        text = " ".join((await c.get("/portal/key")).text.split())
+        assert "does not accept a model key as a login" in text and "nobody else registered" not in text

@@ -14,6 +14,8 @@ checkout; the clicks in Keycloak work today.
 
 ---
 
+Before exposing the gateway, walk through [`SECURITY_CHECKLIST.md`](SECURITY_CHECKLIST.md).
+
 ## Set up (once)
 
 | I want to | Do this |
@@ -42,9 +44,10 @@ checkout; the clicks in Keycloak work today.
 
 | I want to | Do this |
 |---|---|
-| **Register a person's LLM key** | The person: open `<gateway address>/portal`, sign in, **Model key**, paste, save. Or you: `make gateway-key-register OWNER=<id> LABEL=work` and type the key (after the gateway units merge). One active key per person; registering again replaces it. |
+| **Register a person's LLM key** | The person: open `<gateway address>/portal`, sign in, **Model key**, paste, save. Or you: `make gateway-key-register OWNER=<id> LABEL=work` and type the key (after the gateway units merge). One active key per person; registering again replaces it. Several people may register the same string (a shared provider key): it works for each as their model key, but it cannot log anyone in. There is no shared fallback key: a person without one gets 403 `upstream_key_required`. |
 | **Add a Jira (or other tool) credential** | The person: the portal, **Tool credentials**, fill the form, save (afterwards it only says "set"). Or you: `make gateway-creds-set OWNER=<id> SERVER=agent-skills VAR=JIRA_PASSWORD` and type the value (after the gateway units merge). Names only, never values: `make gateway-creds-list OWNER=<id>`. |
 | **Revoke a key** | `make gateway-key-list OWNER=<id>` to see the ids, then `make gateway-key-revoke KEY_ID=<key id>` (after the gateway units merge). |
+| **Let a client use a model key as its login** (e.g. LibreChat with a pasted key) | Set `GATEWAY_MODEL_KEY_LOGIN` in `.env.agent-gateway` and restart the gateway: `read-only` (default: no write tools, no raw model calls), `full`, or `off`. It only works while exactly one person registered that string. If two did, the client gets 401 and the audit log shows `model_key_shared`; tell them to sign in with Keycloak or use a gateway key. When one of them revokes theirs, the other's string starts working as a login again (read-only in the default mode). |
 | **Issue a gateway key** (for a script that cannot sign in) | Only if you set `GATEWAY_ISSUE_KEYS=true` in `.env.agent-gateway` and restarted the gateway: `make gateway-key-create OWNER=<id> LABEL=ci`. It prints the key once. Prefer a service account (below). |
 | **Give a script or automation its own identity** | Admin console, **Clients**, copy `agentflow-automation` (or create a client with the same settings), turn it **Enabled** on, copy the secret from **Credentials**, then **Service account roles**: nothing to add. Under **Users**, find `service-account-<client id>` and **Join group** the groups it needs. The script asks for a token with the client-credentials grant and sends it as the bearer. |
 | **Rotate a client secret** | Admin console, **Clients**, the client (`agent-gateway-portal` or `agent-gateway-directory`), tab **Credentials, Regenerate**. Paste the new value into `.env.agent-gateway` and run `make gateway-up` (restarts the gateway with it). The portal and directory sync are down between the regenerate and the restart, so do both at once. The Telegram client is public and has no secret. |

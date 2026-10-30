@@ -19,7 +19,7 @@ route accepts `Authorization`.
 - Secret inputs are `type=password`, `autocomplete=off`, never prefilled. No response contains a
   stored secret, ever. Tests assert this with a sentinel.
 - Every successful change writes an audit event in the same transaction (FR-PRT-12).
-- Errors are shown as plain messages on the same page with status 400, 403 or 409; never a stack trace.
+- Errors are shown as plain messages on the same page with status 400 or 403 (409 only for "no active key to revoke"); never a stack trace.
 
 ## Routes
 
@@ -30,7 +30,7 @@ route accepts `Authorization`.
 | `GET /portal/callback` | finish sign-in | checks `state`, exchanges the code (client secret + verifier), verifies the ID token (signature, `iss`, `aud`=`PORTAL_CLIENT_ID`, `nonce`, `exp`), requires an enabled directory row (refreshing once if the person is unknown), sets `portal_session`, clears `portal_login`, 303 to `next` or `/portal` |
 | `POST /portal/logout` | sign out | clears the cookie; redirects to the issuer's end-session endpoint with `post_logout_redirect_uri=PORTAL_BASE_URL/portal/login` |
 | `GET /portal/key` | my model key | shows the active key's `label`, `prefix` (as "ends in …abcd"), `created_at`, `last_used_at`, or "none"; forms below |
-| `POST /portal/key` | register or replace | fields `label` (optional), `secret` (required, 8 to 512 chars, no whitespace); 303 to `/portal/key` with a flash message; `409` if the key is registered already (message does not say by whom) |
+| `POST /portal/key` | register or replace | fields `label` (optional), `secret` (required, 8 to 512 chars, no whitespace); 303 to `/portal/key` with a flash message (a key another person registered is accepted and nothing says so); the page explains the key is used to call the model, may act as the login only if nobody else registered the same string and only read-only (per `GATEWAY_MODEL_KEY_LOGIN`), and stops being a login when shared |
 | `POST /portal/key/revoke` | revoke the active key | |
 | `GET /portal/credentials` | my tool credentials | one card per server in `config/mcp-servers.yaml` that declares credentials; each declared variable shows `label`, "set" or "not set", `updated_at`; never a value |
 | `POST /portal/credentials/{server}/{var}` | set or replace | field `value`; the pair must be declared, else 404 |

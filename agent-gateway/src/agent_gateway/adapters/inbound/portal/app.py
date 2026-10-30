@@ -46,7 +46,6 @@ from agent_gateway.application.ports import ToolGateway
 from agent_gateway.domain.identity import (
     AuthError,
     DirectoryEntry,
-    DuplicateKey,
     KeyIssuingDisabled,
     KeyScope,
     is_active,
@@ -88,6 +87,7 @@ class PortalDeps:
     tools: ToolGateway
     servers: Mapping[str, ServerInfo]
     issue_keys: bool = False
+    model_key_login: str = "read-only"
     agent_ids: Callable[[DirectoryEntry], list[str]] = field(default=lambda entry: [])
     sync: DirectorySync | None = None
     max_stale: timedelta = timedelta(seconds=900)
@@ -249,7 +249,8 @@ def create_portal_app(deps: PortalDeps) -> Starlette:
     # ---- my model key
 
     async def key_page(request: Request, status: int = 200, error: str | None = None) -> Response:
-        return page(request, "key.html", status, key=await active_model_key(request.state.session.sub), error=error)
+        return page(request, "key.html", status, key=await active_model_key(request.state.session.sub), error=error,
+                    login_mode=deps.model_key_login)
 
     async def key_set(request: Request, form) -> Response:
         sub = request.state.session.sub
@@ -258,10 +259,7 @@ def create_portal_app(deps: PortalDeps) -> Starlette:
             return await key_page(request, 400, f"The label is longer than {MAX_LABEL} characters.")
         if not SECRET_SHAPE.match(secret):
             return await key_page(request, 400, "The key must be 8 to 512 characters without spaces.")
-        try:
-            await deps.keys.register_upstream(sub, label, secret, actor=sub)
-        except DuplicateKey:
-            return await key_page(request, 409, "That key is registered already.")
+        await deps.keys.register_upstream(sub, label, secret, actor=sub)
         return RedirectResponse("/portal/key?m=key_saved", status_code=303)
 
     async def key_revoke(request: Request, form) -> Response:

@@ -37,7 +37,6 @@ from tests.application.fakes import (
 
 KEY = "agk_test_key"
 KEY2 = "agk_other_key"
-SHARED_KEY = "sk-shared-deployment-key"
 
 
 def _key(key_id: str, owner: str) -> KeyInfo:
@@ -49,23 +48,35 @@ class Keys:
     """A ``KeyService`` stand-in that recognises two keys and holds registered model keys."""
 
     def __init__(self) -> None:
-        self.users = {hash_key(KEY): _key("k1", "alice"), hash_key(KEY2): _key("k2", "bob")}
+        self.users = {hash_key(KEY): [_key("k1", "alice")], hash_key(KEY2): [_key("k2", "bob")]}
         self.upstream: dict[str, str] = {}
 
-    async def resolve(self, bearer):
-        return self.users.get(hash_key(bearer))
+    async def resolve_all(self, bearer):
+        return list(self.users.get(hash_key(bearer), []))
+
+    def add_issued(self, owner: str, secret: str, scope: KeyScope) -> None:
+        self.users.setdefault(hash_key(secret), []).append(
+            KeyInfo(f"iss-{owner}", owner, "issued", "", secret[:8], scope, datetime(2026, 1, 1, tzinfo=timezone.utc),
+                    None, None, None))
 
     def register(self, owner: str, secret: str) -> None:
         """A person registers their own model key; it also works as their bearer."""
+        self.revoke_model_key(owner)
         self.upstream[owner] = secret
-        self.users[hash_key(secret)] = KeyInfo(f"up-{owner}", owner, "upstream", "", secret[-4:], KeyScope(),
-                                               datetime(2026, 1, 1, tzinfo=timezone.utc), None, None, None)
+        self.users.setdefault(hash_key(secret), []).append(
+            KeyInfo(f"up-{owner}", owner, "upstream", "", secret[-4:], KeyScope(),
+                    datetime(2026, 1, 1, tzinfo=timezone.utc), None, None, None))
+
+    def revoke_model_key(self, owner: str) -> None:
+        self.upstream.pop(owner, None)
+        for infos in self.users.values():
+            infos[:] = [i for i in infos if not (i.owner == owner and i.kind == "upstream")]
 
     async def upstream_key(self, owner):
         return self.upstream.get(owner)
 
     async def list_for(self, owner):
-        return [i for i in self.users.values() if i.owner == owner and i.kind == "upstream"]
+        return [i for infos in self.users.values() for i in infos if i.owner == owner and i.kind == "upstream"]
 
 
 def streamed(status: int, payload, content_type: str = "application/json") -> httpx.Response:
@@ -86,6 +97,7 @@ class Upstream:
     seen: list = field(default_factory=list)          # (method, path, headers, body bytes)
     models: list = field(default_factory=lambda: [{"id": "base-model", "object": "model"}])
     down: bool = False
+    reply_headers: dict = field(default_factory=dict)  # added to answers of routes other than chat and models
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         if self.down:
@@ -101,7 +113,9 @@ class Upstream:
                 return httpx.Response(200, text="".join(f"data: {json.dumps(c)}\n\n" for c in chunks) + "data: [DONE]\n\n",
                                       headers={"content-type": "text/event-stream"})
             return streamed(reply.get("status", 200), reply.get("json", reply))
-        return streamed(200, {"echo": request.url.path})
+        answer = streamed(200, {"echo": request.url.path})
+        answer.headers.update(self.reply_headers)
+        return answer
 
 
 def _as_chunks(reply):
@@ -148,7 +162,7 @@ def make_gateway():
     clients = []
 
     async def make(agents=None, *, rpm=1000, max_body=4_000_000, specs=None, creds=None, servers=None,
-                   shared_key=SHARED_KEY):
+                   model_key_login="read-only", registered=("alice", "bob")):
         upstream = Upstream()
         up_client = httpx.AsyncClient(base_url="http://upstream/v1", transport=httpx.MockTransport(upstream.handler))
         agents = {a.id: a for a in (agents or [agent("router")])}
@@ -157,7 +171,9 @@ def make_gateway():
         tools = FakeTools(specs or {})
         now = FakeNow()
         keys, audit = Keys(), FakeAudit(now)
-        credentials = UpstreamKeys(keys, shared_key, audit, "https://portal.example")
+        for person in registered:                  # everyone has a model key unless a test says otherwise
+            keys.register(person, f"sk-default-{person}-model-key")
+        credentials = UpstreamKeys(keys, audit, "https://portal.example")
         deps = Deps(llm=HttpLlm(up_client, retries=1, backoff=0), upstream=credentials, tools=tools, store=FakeStore(), creds=creds or FakeCreds(),
                     sink=Sink(), clock=Clock(), agents=agents, servers=servers, secret=b"s", settings=Settings())
         config = GatewayConfig(agents, servers, {}, Settings(), LimitsFile(requests_per_minute=rpm, max_body_bytes=max_body),
@@ -167,7 +183,7 @@ def make_gateway():
             directory.rows[sub_id] = DirectoryEntry(sub_id, sub_id, ("product",), ("agent-user",), True, now())
         sync = DirectorySync(source, directory, audit, now=now)
         authenticator = Authenticator(keys, tokens, directory, sync, audit, issue_keys=True,
-                                      max_stale=timedelta(minutes=15), now=now)
+                                      max_stale=timedelta(minutes=15), now=now, model_key_login=model_key_login)
         container = Container(config, deps, keys, MemoryLock(), MemoryRateLimiter(), up_client, credentials, LangGraphDriver(),
                               authenticator=authenticator, directory_sync=sync, audit=audit)
         client = httpx.AsyncClient(transport=httpx.ASGITransport(app=create_app(container)), base_url="http://gw")

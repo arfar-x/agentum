@@ -57,16 +57,17 @@ class KeyManager:
         info, _ = await self._records.add_key(new, actor=actor or owner)
         return info
 
-    async def resolve(self, bearer: str) -> KeyInfo | None:
+    async def resolve_all(self, bearer: str) -> list[KeyInfo]:
+        """Every active key with this hash. Several only for a model key several people registered;
+        the last-used time is touched only when exactly one matches."""
         now = self._now()
-        info = await self._records.find_active(hash_key(bearer), now)
-        if info is None or not is_active(info, now):
-            return None
-        if info.kind == "issued" and not self._issue_keys:
-            return None
-        if info.last_used_at is None or now - info.last_used_at >= TOUCH_EVERY:
-            await self._records.touch(info.id, now)
-        return info
+        found = [i for i in await self._records.find_active(hash_key(bearer), now)
+                 if is_active(i, now) and (i.kind != "issued" or self._issue_keys)]
+        if len(found) == 1:
+            info = found[0]
+            if info.last_used_at is None or now - info.last_used_at >= TOUCH_EVERY:
+                await self._records.touch(info.id, now)
+        return found
 
     async def upstream_key(self, owner: str) -> str | None:
         stored = await self._records.upstream_secret(owner)

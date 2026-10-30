@@ -292,6 +292,8 @@ it.
   glossary.
 - `integrations/keycloak/` -- the realm template, the idempotent `apply.sh`, the dev Keycloak, the make
   targets (`module.mk`). Identity is specified in `specs/003-identity-access/`.
+- [`docs/SECURITY_CHECKLIST.md`](docs/SECURITY_CHECKLIST.md) -- what to verify about identity, keys and the
+  gateway pass-through before exposing the gateway; re-check after touching authentication.
 - [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) -- specific known
   failure modes (e.g. MCP tools missing from the tool picker).
 - A module's spec of record lives in the module (`kb/docs/SPEC.md`): anything

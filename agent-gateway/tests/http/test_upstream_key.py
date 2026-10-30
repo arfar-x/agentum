@@ -4,7 +4,7 @@
 
 import logging
 
-from tests.conftest import KEY, KEY2, SHARED_KEY, completion
+from tests.conftest import KEY, KEY2, completion
 
 ALICE_KEY = "sk-alice-own-model-key-1111"
 BOB_KEY = "sk-bob-own-model-key-2222"
@@ -32,18 +32,8 @@ async def test_two_people_reach_the_upstream_with_their_own_keys_for_turns_and_p
     assert sent(gw) == [f"Bearer {ALICE_KEY}", f"Bearer {BOB_KEY}"] * 2
 
 
-async def test_a_person_without_a_key_uses_the_shared_one_for_turns_pass_through_and_listing(make_gateway):
-    gw = await make_gateway()
-    gw.upstream.replies += [completion("a"), completion("b"), completion("c")]
-    await chat(gw, "router")
-    await chat(gw, "some-model")
-    await gw.client.get("/v1/models", headers=gw.auth())
-    assert {h.get("authorization") for _, _, h, _ in gw.upstream.seen} == {f"Bearer {SHARED_KEY}"}
-    assert len(gw.upstream.seen) == 3
-
-
 async def test_with_no_key_at_all_the_call_fails_clearly_and_nothing_is_sent(make_gateway):
-    gw = await make_gateway(shared_key="")
+    gw = await make_gateway(registered=())
     for model in ("router", "some-model"):
         r = await chat(gw, model)
         err = r.json()["error"]
@@ -55,7 +45,7 @@ async def test_with_no_key_at_all_the_call_fails_clearly_and_nothing_is_sent(mak
 
 
 async def test_the_pass_through_replaces_the_callers_authorization_and_never_forwards_it(make_gateway):
-    gw = await make_gateway(shared_key="")
+    gw = await make_gateway()
     gw.container.keys.register("alice", ALICE_KEY)
     gw.upstream.replies += [completion("x")]
     await chat(gw, "some-model", KEY)                        # the bearer is a gateway key, not the model key
@@ -66,7 +56,7 @@ async def test_the_pass_through_replaces_the_callers_authorization_and_never_for
 
 
 async def test_a_registered_key_used_as_the_bearer_is_the_key_used_upstream(make_gateway):
-    gw = await make_gateway(shared_key="")
+    gw = await make_gateway(model_key_login="full")
     gw.container.keys.register("alice", ALICE_KEY)
     gw.upstream.replies += [completion("a"), completion("b")]
     await chat(gw, "router", ALICE_KEY)

@@ -237,8 +237,10 @@ Two kinds share one table because both are "a secret a caller can present, owned
 **Invariants**
 
 1. At most one active (`revoked_at IS NULL`) `upstream` key per `owner`.
-2. `key_hash` is unique among active keys, so two people cannot register the same model key, and a
-   revoked key's hash may be registered again.
+2. `key_hash` is unique among active `issued` keys only (partial unique index, migration 006). Several
+   people may hold the same `upstream` key string; the bearer lookup returns every active match and a
+   string held by two or more owners identifies nobody (FR-ATH-14). A revoked key's hash may be
+   registered again.
 3. `secret_enc` is null for every `issued` key and for every revoked `upstream` key (revocation
    destroys the stored secret). It is non-null for an active `upstream` key.
 4. An `issued` key can only be created while `GATEWAY_ISSUE_KEYS` is true, and authenticates only
@@ -526,7 +528,8 @@ CREATE TABLE api_keys (
     )
 );
 CREATE INDEX api_keys_owner ON api_keys (owner);
-CREATE UNIQUE INDEX api_keys_active_hash ON api_keys (key_hash) WHERE revoked_at IS NULL;
+CREATE UNIQUE INDEX api_keys_active_hash ON api_keys (key_hash) WHERE revoked_at IS NULL AND kind = 'issued';   -- 006
+CREATE INDEX api_keys_active_lookup ON api_keys (key_hash) WHERE revoked_at IS NULL;                            -- 006
 CREATE UNIQUE INDEX api_keys_one_active_upstream ON api_keys (owner)
     WHERE kind = 'upstream' AND revoked_at IS NULL;
 

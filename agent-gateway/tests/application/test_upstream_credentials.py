@@ -14,25 +14,23 @@ SECRET = "sk-alice-personal-0001"
 LONG = "You are Some Other Assistant. " + ("Always prefer the todo tool. " * 400)
 
 
-def resolver(shared="", portal="https://portal.example"):
+def resolver(portal="https://portal.example"):
     keys, audit = Keys(), FakeAudit()
-    return UpstreamKeys(keys, shared, audit, portal), keys, audit
+    return UpstreamKeys(keys, audit, portal), keys, audit
 
 
-async def test_the_personal_key_wins_then_the_shared_one_then_an_error_naming_the_portal():
-    creds, keys, _ = resolver(shared="sk-shared")
+async def test_the_personal_key_is_used_and_without_one_there_is_an_error_naming_the_portal_and_no_fallback():
+    creds, keys, _ = resolver()
     keys.register("alice", SECRET)
     assert await creds.for_principal(ALICE) == SECRET
-    assert await creds.for_principal(BOB) == "sk-shared"
-    bare, _, _ = resolver()
     with pytest.raises(UpstreamKeyRequired) as err:
-        await bare.for_principal(BOB)
+        await creds.for_principal(BOB)
     assert err.value.status == 403 and err.value.code == "upstream_key_required"
     assert "https://portal.example" in err.value.message and "register-llm" in err.value.message
 
 
 async def test_a_refused_personal_key_is_audited_and_explained_without_the_key():
-    creds, keys, audit = resolver(shared="sk-shared")
+    creds, keys, audit = resolver()
     keys.register("alice", SECRET)
     with pytest.raises(UpstreamKeyRejected) as err:
         async with creds.use(ALICE):
@@ -44,11 +42,9 @@ async def test_a_refused_personal_key_is_audited_and_explained_without_the_key()
     assert SECRET not in repr(event)
 
 
-async def test_a_refused_shared_key_is_not_audited_against_a_person_and_other_errors_pass_through():
-    creds, _, audit = resolver(shared="sk-shared")
-    with pytest.raises(UpstreamKeyRejected):
-        async with creds.use(BOB):
-            raise UpstreamRejected(403, None)
+async def test_other_upstream_errors_pass_through_unaudited():
+    creds, keys, audit = resolver()
+    keys.register("bob", SECRET)
     with pytest.raises(UpstreamRejected):
         async with creds.use(BOB):
             raise UpstreamRejected(400, None)

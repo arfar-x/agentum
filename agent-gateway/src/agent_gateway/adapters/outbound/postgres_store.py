@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from psycopg import errors
 from psycopg.types.json import Jsonb
 from psycopg_pool import AsyncConnectionPool
 
@@ -19,7 +18,6 @@ from agent_gateway.application.models import PendingTurn, Thread
 from agent_gateway.domain.identity import (
     AuditEvent,
     DirectoryEntry,
-    DuplicateKey,
     KeyInfo,
     clean_groups,
     clean_roles,
@@ -172,26 +170,21 @@ class PostgresStore:
                     "WHERE owner=%s AND kind='upstream' AND revoked_at IS NULL RETURNING id::text",
                     (new.owner,))).fetchone()
                 replaced = row[0] if row else None
-            try:
-                row = await (await conn.execute(
-                    "INSERT INTO api_keys (owner, kind, label, prefix, key_hash, secret_enc, scope, expires_at) "
-                    f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING {_KEY_COLUMNS}",
-                    (new.owner, new.kind, new.label, new.prefix, new.key_hash, new.secret_enc,
-                     Jsonb(scope_to_json(new.scope)), new.expires_at))).fetchone()
-            except errors.UniqueViolation as exc:
-                if exc.diag.constraint_name == "api_keys_active_hash" or exc.diag.constraint_name is None:
-                    raise DuplicateKey("that key is already registered") from None
-                raise
+            row = await (await conn.execute(
+                "INSERT INTO api_keys (owner, kind, label, prefix, key_hash, secret_enc, scope, expires_at) "
+                f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING {_KEY_COLUMNS}",
+                (new.owner, new.kind, new.label, new.prefix, new.key_hash, new.secret_enc,
+                 Jsonb(scope_to_json(new.scope)), new.expires_at))).fetchone()
             info = _key_info(row)
             await _audit(conn, actor, *key_added_event(info, replaced))
         return info, replaced
 
-    async def find_active(self, key_hash: str, now: datetime) -> KeyInfo | None:
+    async def find_active(self, key_hash: str, now: datetime) -> list[KeyInfo]:
         async with self._pool.connection() as conn:
-            row = await (await conn.execute(
+            rows = await (await conn.execute(
                 f"SELECT {_KEY_COLUMNS} FROM api_keys WHERE key_hash=%s AND revoked_at IS NULL "
-                "AND (expires_at IS NULL OR expires_at > %s)", (key_hash, now))).fetchone()
-        return _key_info(row) if row else None
+                "AND (expires_at IS NULL OR expires_at > %s) ORDER BY created_at, id", (key_hash, now))).fetchall()
+        return [_key_info(r) for r in rows]
 
     async def touch(self, key_id: str, now: datetime) -> None:
         async with self._pool.connection() as conn:

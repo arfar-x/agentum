@@ -38,7 +38,19 @@ The gateway needs Postgres and Redis. Put TLS in front of it: it publishes plain
 
 ## Connect a client
 
-Use the gateway's address with `/v1` as the base URL and your key as the API key.
+Use the gateway's address with `/v1` as the base URL and one of these as the API key:
+
+- a Keycloak access token (the Telegram bot, the portal, automations);
+- a gateway-issued `agk_` key (only while `GATEWAY_ISSUE_KEYS=true`): one key, one person;
+- your own registered model key, according to `GATEWAY_MODEL_KEY_LOGIN`: `read-only` (default: no write
+  tools and no raw model pass-through), `full`, or `off`. It identifies you only if nobody else registered the
+  same string; a string several people registered gets `401 model_key_shared`.
+
+There is no shared model key: every model call uses the one the caller registered, and a caller without one
+gets `403 upstream_key_required`. Stored credentials and model keys are always looked up by the person's
+account id, never by the key presented. The pass-through (`/v1/*` for any non-agent model) forwards only a
+short list of request headers, refuses paths that could leave the upstream's `/v1` prefix, and is refused
+for keys limited to some agents or to read-only use.
 
 ```python
 from openai import OpenAI

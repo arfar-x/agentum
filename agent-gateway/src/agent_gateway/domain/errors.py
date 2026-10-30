@@ -61,6 +61,22 @@ class IdentityUnavailable(GatewayError):
     retry_after = 30
 
 
+class PermissionDenied(GatewayError):
+    """The caller is known but its key does not allow this."""
+
+    status = 403
+    type = "invalid_request_error"
+    code = "permission_denied"
+
+
+class InvalidUrl(GatewayError):
+    """A pass-through path that could leave the upstream's API prefix."""
+
+    status = 404
+    type = "invalid_request_error"
+    code = "invalid_url"
+
+
 class RateLimited(GatewayError):
     status = 429
     type = "rate_limit_error"
@@ -99,7 +115,7 @@ class UpstreamRejected(GatewayError):
 
 
 class UpstreamKeyRequired(GatewayError, NoUpstreamKey):
-    """The caller has no model key and the deployment has no shared one."""
+    """The caller has registered no model key."""
 
     status = 403
     type = "invalid_request_error"

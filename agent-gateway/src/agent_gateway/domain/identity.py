@@ -84,12 +84,12 @@ class KeyIssuingDisabled(Exception):
     """GATEWAY_ISSUE_KEYS is off."""
 
 
-class DuplicateKey(Exception):
-    """The hash is registered already. Says nothing about who holds it."""
-
-
 class NoUpstreamKey(Exception):
-    """No personal key and no UPSTREAM_API_KEY."""
+    """The person has no registered model key (there is no shared fallback key)."""
+
+
+MODEL_KEY_LOGIN_MODES = ("off", "read-only", "full")
+READ_ONLY_SCOPE = KeyScope(write=False)
 
 
 def valid_name(name: object) -> bool:

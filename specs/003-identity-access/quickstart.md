@@ -103,8 +103,9 @@ python -m agent_gateway key register-llm --owner "$ALICE_SUB" --label e2e   # re
 
 (or through `/portal/key`, signed in as Alice.) Then a chat as Alice with `model=product-agent`.
 The stub must log `Authorization: Bearer <Alice's key>` for the agent turn. Repeat with a
-pass-through model name and with `GET /v1/models` (SC-006). Without a registered key and with no
-`UPSTREAM_API_KEY`, expect `403 upstream_key_required` naming the portal address.
+pass-through model name and with `GET /v1/models` (SC-006). A person without a registered key gets
+`403 upstream_key_required` naming the portal address (the gateway starts with no `UPSTREAM_API_KEY`;
+there is no shared fallback).
 
 ## 6. The model key as a bearer
 
@@ -113,7 +114,11 @@ curl -s -H "Authorization: Bearer $ALICE_LLM_KEY" http://localhost:8080/v1/model
 ```
 
 Same listing as step 4 (groups come from the directory copy). Check `audit list` shows
-`key.register`.
+`key.register`. The default `GATEWAY_MODEL_KEY_LOGIN=read-only` gives this caller no write tools and
+refuses a pass-through call with `403 permission_denied`; with `full` it has the default scope and
+with `off` the string is a 401. Register the same string for a second person: the bearer is now
+`401 model_key_shared` and `audit list --action auth.denied` shows that reason; revoke one of the two and the
+other string works again (read-only). A request for `/v1/../metrics` is a 404 and never leaves the gateway.
 
 ## 7. Disabled person, stale directory, outage
 

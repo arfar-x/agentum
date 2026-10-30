@@ -26,7 +26,7 @@ Merge order: U1 → U2 → U5 → U3 → U7 / U6 → U4 → U8 → U9, then the 
 
 | Unit | Branch | Needs | Rows it flips to `done` |
 |---|---|---|---|
-| U1 | `feat/idn-store` | none | FR-IDN-01, 02, 05, 06, 07, 08; FR-KEY-01..08; FR-CRD-06, 07, 09; FR-AUD-01..06; FR-OPS-05, 06, 08; (part of FR-CFG-04: `GATEWAY_ISSUE_KEYS`, `UPSTREAM_API_KEY`, `AUDIT_RETENTION_DAYS`) |
+| U1 | `feat/idn-store` | none | FR-IDN-01, 02, 05, 06, 07, 08; FR-KEY-01..08; FR-CRD-06, 07, 09; FR-AUD-01..06; FR-OPS-05, 06, 08; (part of FR-CFG-04: `GATEWAY_ISSUE_KEYS`, `AUDIT_RETENTION_DAYS`; `UPSTREAM_API_KEY` was removed by the identity hardening change) |
 | U2 | `feat/idn-auth` | U1 | FR-IDN-03, 04; FR-ATH-01..12; FR-IDP-01..07; FR-OPS-07; rest of FR-CFG-04 except portal and `KB_TRUST_SECRET` |
 | U3 | `feat/idn-authz` | U1 (and U2 for `TurnRequest.principal`) | FR-ENT-01..10 |
 | U4 | `feat/idn-portal` | U1, U2 | FR-PRT-01..12; FR-CRD-08; portal part of FR-CFG-04 |

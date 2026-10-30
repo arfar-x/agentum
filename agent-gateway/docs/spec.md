@@ -52,7 +52,7 @@ A self-hosted service that serves configured agents through an OpenAI-compatible
 | FR-027 | FR-CFG-01 … FR-CFG-03 |
 | FR-028, FR-029 | NFR-ARC-01 … NFR-ARC-04 |
 | (added in 0.7.0) | FR-MEM-01 … FR-MEM-06 |
-| (added in 0.8.0 and 0.9.0, spec 003; FR-ENT-01 … 10 are `done`, the rest `planned`) | FR-IDP-01 … 07, FR-IDN-01 … 08, FR-ATH-01 … 12, FR-KEY-01 … 08, FR-UPS-01 … 07, FR-ENT-01 … 10, FR-CRD-06 … 09, FR-OPS-05 … 08, FR-CFG-04, FR-PRT-01 … 12, FR-AUD-01 … 06, FR-KBI-01 … 04 |
+| (added in 0.8.0 and 0.9.0, spec 003; FR-ENT-01 … 10 are `done`, the rest `planned`) | FR-IDP-01 … 07, FR-IDN-01 … 08, FR-ATH-01 … 14, FR-KEY-01 … 08, FR-UPS-01 … 08, FR-ENT-01 … 10, FR-CRD-06 … 09, FR-OPS-05 … 08, FR-CFG-04, FR-PRT-01 … 13, FR-AUD-01 … 06, FR-KBI-01 … 04 |
 
 ## 4. Acceptance scenarios
 
@@ -87,6 +87,9 @@ A self-hosted service that serves configured agents through an OpenAI-compatible
 | FR-RTE-04 | Every other `/v1/*` route MUST be proxied to the upstream, streaming. | done |
 | FR-RTE-05 | `/v1/models` MUST list upstream models and agents, and MUST still list agents when the upstream listing fails. | done |
 | FR-RTE-06 | Model entries MUST carry the context window in tokens (`context_window`, `context_length`, `max_model_len`) when known: an agent's own setting, else a per-model table, else the configured default. An upstream entry that already states one MUST be left untouched. | done |
+| FR-RTE-07 | A pass-through path MUST be refused (OpenAI-shaped 404) when any segment is `.` or `..` in raw or percent-encoded form (including double encoding), when it contains a backslash, a NUL or a control character, or when the resulting upstream URL does not stay under the upstream base path. Nothing is sent upstream. | done |
+| FR-RTE-08 | A pass-through request MUST be refused with 403 `permission_denied` for a caller whose key scope names agents or forbids writes (an issued key with a restricted scope, or a model-key login in `read-only` mode). Token callers and unrestricted keys are unaffected. | done |
+| FR-RTE-09 | A pass-through request MUST forward only an allow-list of request headers (`content-type`, `accept`, `user-agent`, `openai-organization`, `openai-project`, `openai-beta`, `x-request-id`, `x-client-request-id`); the caller's `Authorization` is replaced by the person's model key, and cookies, tool-credential headers and every other header are dropped. Hop-by-hop headers MUST be dropped in both directions. | done |
 
 ### 5.3 Agent definition — `FR-AGT`
 
@@ -213,7 +216,7 @@ A self-hosted service that serves configured agents through an OpenAI-compatible
 | FR-CFG-01 | An invalid configuration file MUST stop startup with a message naming file and problem. | done |
 | FR-CFG-02 | Non-secret settings (limits, aliases, ask-tool templates) MUST come from `config/gateway.yaml` with documented defaults. | done |
 | FR-CFG-03 | Secrets MUST come only from the environment. | done |
-| FR-CFG-04 | The identity settings (`GATEWAY_ISSUE_KEYS`, `UPSTREAM_API_KEY`, `IDENTITY_PROVIDER`, `OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_JWKS_TTL`, `DIRECTORY_CLIENT_ID`, `DIRECTORY_CLIENT_SECRET`, `DIRECTORY_SYNC_SECONDS`, `DIRECTORY_MAX_STALE_SECONDS`, `PORTAL_CLIENT_ID`, `PORTAL_CLIENT_SECRET`, `PORTAL_SESSION_SECRET`, `PORTAL_BASE_URL`, `KB_TRUST_SECRET`, `AUDIT_RETENTION_DAYS`) MUST come from the environment, have the documented defaults, and be validated at startup; a missing or inconsistent one MUST stop startup with a message naming it and no secret value. | partial |
+| FR-CFG-04 | The identity settings (`GATEWAY_ISSUE_KEYS`, `GATEWAY_MODEL_KEY_LOGIN`, `IDENTITY_PROVIDER`, `OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_JWKS_TTL`, `DIRECTORY_CLIENT_ID`, `DIRECTORY_CLIENT_SECRET`, `DIRECTORY_SYNC_SECONDS`, `DIRECTORY_MAX_STALE_SECONDS`, `PORTAL_CLIENT_ID`, `PORTAL_CLIENT_SECRET`, `PORTAL_SESSION_SECRET`, `PORTAL_BASE_URL`, `KB_TRUST_SECRET`, `AUDIT_RETENTION_DAYS`) MUST come from the environment, have the documented defaults, and be validated at startup; a missing or inconsistent one MUST stop startup with a message naming it and no secret value. | partial |
 
 ### 5.14 Architecture — `NFR-ARC`
 
@@ -268,7 +271,7 @@ Who a caller is. Design and decisions: [`specs/003-identity-access/`](../../spec
 
 | id | Requirement | Status |
 |---|---|---|
-| FR-ATH-01 | A bearer MUST be looked up first as a key (by hash) and only then verified as a token. Neither matching MUST give 401. | done |
+| FR-ATH-01 | A bearer MUST be looked up first as a key (by hash) and only then verified as a token. Neither matching MUST give 401. A key bearer is an issued key (while issuing is on) or, per `GATEWAY_MODEL_KEY_LOGIN` (FR-ATH-13), a person's own model key. | done |
 | FR-ATH-02 | A token MUST be refused unless its signature verifies against the issuer's published keys with an allowed algorithm (RS256 or ES256; never `none` or a shared-secret algorithm), `iss` equals `OIDC_ISSUER`, `aud` contains `OIDC_AUDIENCE`, and `exp` and `nbf` hold (60 seconds of leeway). A bearer over 8 KiB MUST be refused. | done |
 | FR-ATH-03 | The issuer's signing keys MUST be cached for `OIDC_JWKS_TTL`, refetched at most once every 30 seconds when a token names an unknown key id, and kept in use when a refetch fails. | done |
 | FR-ATH-04 | A token caller's principal MUST take the account id, username, groups and roles from the `Identity` the token verifier returns, with the default key scope. Groups and roles are read from the identity provider and MUST NOT be created, changed or assigned by the gateway. | done |
@@ -278,8 +281,10 @@ Who a caller is. Design and decisions: [`specs/003-identity-access/`](../../spec
 | FR-ATH-08 | A revoked or expired key MUST be refused on the next request, and an issued key MUST be refused whenever `GATEWAY_ISSUE_KEYS` is off. | done |
 | FR-ATH-09 | Every route except `/healthz` and the portal's own sign-in routes MUST require authentication. | done |
 | FR-ATH-10 | Requests MUST be rate-limited per person, whichever bearer is used; over the limit MUST return 429. | done |
-| FR-ATH-11 | A refusal MUST use OpenAI's error object, MUST NOT say which check failed, MUST NOT contain the bearer, and MUST be audited (best effort) with a reason code. | done |
+| FR-ATH-11 | A refusal MUST use OpenAI's error object, MUST NOT say which check failed, MUST NOT contain the bearer, and MUST be audited (best effort) with a reason code. The one exception is `model_key_shared` (FR-ATH-14). | done |
 | FR-ATH-12 | Startup MUST fail, naming the setting (validated by the selected provider's adapter, FR-IDP-03), when `OIDC_ISSUER`, `OIDC_AUDIENCE` or `DIRECTORY_CLIENT_SECRET` is missing, when the stale limit is below twice the sync interval, or when the portal is enabled without its client secret, session secret (at least 32 bytes) or issuer. | done |
+| FR-ATH-13 | `GATEWAY_MODEL_KEY_LOGIN` (`off`, `read-only` or `full`; default `read-only`) MUST decide whether a person's own model key presented as the bearer identifies that person. `off`: such a string never authenticates. `read-only`: it authenticates with `KeyScope(write=False)`, so approval-gated write tools are never offered. `full`: the default scope. Keycloak tokens and issued keys are unaffected. An unrecognised value MUST stop startup. | done |
+| FR-ATH-14 | A model-key string identifies a person only when exactly one owner has it registered as an active model key. When two or more different owners have, it MUST be refused with 401, the audit reason `model_key_shared` and the message "This key is shared by several people, so it cannot identify you. Sign in with Keycloak or use a gateway key."; an unknown string gets the ordinary generic 401. Once only one owner remains the string is a valid login again. | done |
 
 ### 5.18 Keys — `FR-KEY`
 
@@ -287,7 +292,7 @@ Who a caller is. Design and decisions: [`specs/003-identity-access/`](../../spec
 |---|---|---|
 | FR-KEY-01 | Registering a person's model key MUST store its SHA-256 hash and an encrypted copy, MUST keep a short non-secret fragment for recognition, and MUST NOT return or list the key afterwards. | done |
 | FR-KEY-02 | A person MUST have at most one active model key. Registering another MUST revoke the first in the same transaction, and revocation MUST destroy the stored encrypted copy. | done |
-| FR-KEY-03 | A key whose hash is active under any owner MUST be refused as a duplicate, without saying whose it is. | done |
+| FR-KEY-03 | An issued key's hash MUST be unique among active keys. A model key MAY be registered by several people (the same string under different owners); registering one MUST never be refused because someone else holds it, and MUST NOT reveal whether anyone does. | done |
 | FR-KEY-04 | Issuing a gateway key MUST be refused, in the command-line tool and in the portal, unless `GATEWAY_ISSUE_KEYS` is true. | done |
 | FR-KEY-05 | An issued key MUST be `agk_` plus at least 32 random bytes, shown once, stored only as a hash, owned by a person, with an expiry and a scope (agents and write). | done |
 | FR-KEY-06 | Listing keys MUST show id, kind, label, fragment, scope, dates and status, and never a secret. | done |
@@ -299,12 +304,13 @@ Who a caller is. Design and decisions: [`specs/003-identity-access/`](../../spec
 | id | Requirement | Status |
 |---|---|---|
 | FR-UPS-01 | Every call made to the upstream model on a person's behalf (agent turns, prompt compaction, the model listing and pass-through requests) MUST use that person's registered key. | done |
-| FR-UPS-02 | A person with no registered key MUST fall back to `UPSTREAM_API_KEY` when it is set, and otherwise MUST get 403 `upstream_key_required` with the place to register one, with nothing sent upstream. | done |
+| FR-UPS-02 | A person with no registered key MUST get 403 `upstream_key_required` with the place to register one, with nothing sent upstream. There is no shared fallback key and no `UPSTREAM_API_KEY` setting. | done |
 | FR-UPS-03 | The pass-through MUST replace the caller's `Authorization` with the resolved key and MUST NOT forward the caller's own token or gateway key. | done |
 | FR-UPS-04 | A model key MUST NOT appear in a log, a response, an error, a stored thread or pending turn, or the model's context. | done |
 | FR-UPS-05 | A 401 or 403 from the upstream on a person's own key MUST be answered with 502 `upstream_key_rejected` saying the key was refused and where to replace it, and MUST be audited. | done |
 | FR-UPS-06 | A resumed turn MUST use the key of the person who resumes it; no key is stored with a paused turn. | done |
 | FR-UPS-07 | A key used as the bearer MUST be the key used upstream for that request. | done |
+| FR-UPS-08 | Stored tool credentials and model keys MUST be read and written by the person's account id (`Principal.user_id`) only, never by the key presented. Two people holding the same model-key string keep separate credentials, and a turn uses only the running person's own. | done |
 
 ### 5.20 Entitlements — `FR-ENT`
 
@@ -337,6 +343,7 @@ Who a caller is. Design and decisions: [`specs/003-identity-access/`](../../spec
 | FR-PRT-10 | No portal response MUST contain a stored secret; pages MUST be `no-store`. | done |
 | FR-PRT-11 | Portal responses MUST carry a restrictive content security policy, frame denial and no referrer, and templates MUST escape all values. | done |
 | FR-PRT-12 | The portal MUST act only on the signed-in person's own data, and every change MUST be audited in the same transaction. | done |
+| FR-PRT-13 | The model-key page MUST say the key is used to call the model; that, depending on `GATEWAY_MODEL_KEY_LOGIN`, it can also act as the person's login only when nobody else registered the same string and only for read-only use; and that sharing a key with colleagues disables it as a login. Registering a key someone else holds MUST succeed and MUST NOT reveal that. | done |
 
 ### 5.22 Audit — `FR-AUD`
 
