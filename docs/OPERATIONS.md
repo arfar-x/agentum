@@ -109,9 +109,10 @@ Optional (compose profile `gateway`); `make up` does not start it.
 
 1. `cp .env.agent-gateway.example .env.agent-gateway`, fill in `POSTGRES_PASSWORD`,
    `DATABASE_URL` (same password), `CREDS_KEY` and `APPROVAL_SECRET`, then `chmod 600` it.
-2. Create the Keycloak realm and the gateway's client secrets: `make idp-realm-apply`
-   ([`KEYCLOAK.md`](KEYCLOAK.md) section A), then set `OIDC_ISSUER` (and `PORTAL_BASE_URL`,
-   `PORTAL_SESSION_SECRET` for the portal) in `.env.agent-gateway`. `make up` has already generated
+2. Get the realm details from your Keycloak administrator
+   ([`KEYCLOAK_ADMIN_SETUP.md`](KEYCLOAK_ADMIN_SETUP.md)), then set `OIDC_ISSUER`, the directory and
+   portal client ids and secrets (and `PORTAL_BASE_URL`, `PORTAL_SESSION_SECRET` for the portal) in
+   `.env.agent-gateway`. `make up` has already generated
    `KB_TRUST_SECRET` in `kb/.env` and copies it into `.env.agent-gateway` when that file exists.
 3. `make gateway-up`. The model it calls is `VLLM_BASE_URL` / `VLLM_DEFAULT_MODEL` from `.env`.
 4. People, groups and roles are managed in Keycloak; a person's own model key and tool credentials in the

@@ -9,7 +9,7 @@ idp-up: ## Start a local, throwaway Keycloak for development (127.0.0.1:8480, da
 idp-down: ## Remove the throwaway Keycloak
 	integrations/keycloak/scripts/dev.sh down
 
-idp-realm-apply: ## Create/update the agentflow realm on the Keycloak in integrations/keycloak/.env.keycloak (idempotent; writes client secrets to .env.agent-gateway if it exists)
+idp-realm-apply: ## Development only: create/update the agentflow realm on the local Keycloak from `make idp-up` (refuses any other address; a real realm is the administrator's, docs/KEYCLOAK_ADMIN_SETUP.md)
 	integrations/keycloak/scripts/prepare.sh
 	integrations/keycloak/apply.sh
 

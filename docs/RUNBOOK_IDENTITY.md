@@ -18,9 +18,9 @@ checkout; the clicks in Keycloak work today.
 
 | I want to | Do this |
 |---|---|
-| Try it on my machine | `make idp-up`, then `make idp-realm-apply`. The admin console is `http://localhost:8480/admin`, user `admin`, password in `integrations/keycloak/.env.keycloak` (`KEYCLOAK_ADMIN_PASSWORD`). `make idp-down` throws it all away. |
-| Create the realm on my real Keycloak | Fill `integrations/keycloak/.env.keycloak` (URL, admin user and password, `GATEWAY_PUBLIC_URL`), then `make idp-realm-apply`. Safe to rerun; it prints what it created and never prints a secret. |
-| Point the gateway at it | In `.env.agent-gateway` set `OIDC_ISSUER=https://<keycloak-host>/realms/agentflow`. `DIRECTORY_CLIENT_SECRET` and `PORTAL_CLIENT_SECRET` were written by the previous step. Then `make gateway-up`. |
+| Try it on my machine (development only) | `make idp-up`, then `make idp-realm-apply`. The admin console is `http://localhost:8480/admin`, user `admin`, password in `integrations/keycloak/.env.keycloak` (`KEYCLOAK_ADMIN_PASSWORD`). `make idp-down` throws it all away. `idp-realm-apply` refuses any address but `localhost` / `127.0.0.1`. |
+| Get the realm on my real Keycloak | Ask the Keycloak administrator to follow [`KEYCLOAK_ADMIN_SETUP.md`](KEYCLOAK_ADMIN_SETUP.md); this stack creates nothing there. They hand back the issuer URL, the client ids and the two client secrets. |
+| Point the gateway at it | In `.env.agent-gateway` set `OIDC_ISSUER=https://<keycloak-host>/realms/<realm>`, `DIRECTORY_CLIENT_ID` / `DIRECTORY_CLIENT_SECRET` and `PORTAL_CLIENT_ID` / `PORTAL_CLIENT_SECRET` from the administrator (section 9 of the setup page). Then `make gateway-up`. |
 
 ## People and access
 
@@ -47,7 +47,7 @@ checkout; the clicks in Keycloak work today.
 | **Revoke a key** | `make gateway-key-list OWNER=<id>` to see the ids, then `make gateway-key-revoke KEY_ID=<key id>` (after the gateway units merge). |
 | **Issue a gateway key** (for a script that cannot sign in) | Only if you set `GATEWAY_ISSUE_KEYS=true` in `.env.agent-gateway` and restarted the gateway: `make gateway-key-create OWNER=<id> LABEL=ci`. It prints the key once. Prefer a service account (below). |
 | **Give a script or automation its own identity** | Admin console, **Clients**, copy `agentflow-automation` (or create a client with the same settings), turn it **Enabled** on, copy the secret from **Credentials**, then **Service account roles**: nothing to add. Under **Users**, find `service-account-<client id>` and **Join group** the groups it needs. The script asks for a token with the client-credentials grant and sends it as the bearer. |
-| **Rotate a client secret** | Admin console, **Clients**, the client (`agent-gateway-portal` or `agent-gateway-directory`), tab **Credentials, Regenerate**. Then `make idp-realm-apply` (copies the new value into `.env.agent-gateway`) and `make gateway-up` (restarts the gateway with it). The portal and directory sync are down between the regenerate and the restart, so do both at once. The Telegram client is public and has no secret. |
+| **Rotate a client secret** | Admin console, **Clients**, the client (`agent-gateway-portal` or `agent-gateway-directory`), tab **Credentials, Regenerate**. Paste the new value into `.env.agent-gateway` and run `make gateway-up` (restarts the gateway with it). The portal and directory sync are down between the regenerate and the restart, so do both at once. The Telegram client is public and has no secret. |
 
 ## Telegram
 
@@ -71,7 +71,7 @@ checkout; the clicks in Keycloak work today.
 |---|---|
 | **Back up** | `make backup` saves the gateway's database, `.env.agent-gateway` (with `CREDS_KEY`), `kb/.env` and `integrations/keycloak/.env.keycloak` together. **Keycloak's own database** (its people, groups, secrets) is not part of this stack: back it up with whatever backs up that server, and take a realm export (**Realm settings, Action, Partial export**) after big changes. |
 | **Restore** | `make restore DIR=backups/<timestamp>` restores the gateway's data with the matching env files. Restore them **together**: with a different `CREDS_KEY` the stored model keys and credentials are unreadable and people register again. After restoring Keycloak from its own backup, `make idp-realm-apply` re-creates anything stack-owned that is missing. |
-| **Rebuild Keycloak from nothing** | New server, `make idp-realm-apply` (realm, clients, roles, example groups), then recreate people and group membership. People keep their gateway data only if their account **ID** is the same, so restore Keycloak's database rather than recreating accounts by hand. |
+| **Rebuild Keycloak from nothing** | The Keycloak administrator redoes [`KEYCLOAK_ADMIN_SETUP.md`](KEYCLOAK_ADMIN_SETUP.md) and recreates people and group membership. People keep their gateway data only if their account **ID** is the same, so restore Keycloak's database rather than recreating accounts by hand. |
 
 ## When Keycloak is down
 

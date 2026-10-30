@@ -142,10 +142,10 @@ They are not in the root `.env`.
 | `OIDC_ISSUER` | none, **required** | The realm address as it appears in tokens (`https://<host>/realms/agentflow`). A mismatch makes every token a 401. |
 | `OIDC_AUDIENCE` | `agent-gateway` | Required `aud`. |
 | `OIDC_JWKS_TTL` | `600` | Seconds signing keys are cached. |
-| `DIRECTORY_CLIENT_ID` / `DIRECTORY_CLIENT_SECRET` | `agent-gateway-directory` / **required** | The read-only service account. `make idp-realm-apply` writes the secret. |
+| `DIRECTORY_CLIENT_ID` / `DIRECTORY_CLIENT_SECRET` | `agent-gateway-directory` / **required** | The read-only service account in the target realm; the administrator creates it and gives you the secret. |
 | `DIRECTORY_SYNC_SECONDS` / `DIRECTORY_MAX_STALE_SECONDS` | `300` / `900` | Copy interval; how old the copy may be before model-key callers get 503. The second must be at least twice the first. |
 | `PORTAL_BASE_URL` | empty (portal off) | Public address of the gateway. Setting it requires the next two. |
-| `PORTAL_CLIENT_ID` / `PORTAL_CLIENT_SECRET` | `agent-gateway-portal` / empty | The portal's confidential client; `make idp-realm-apply` writes the secret. |
+| `PORTAL_CLIENT_ID` / `PORTAL_CLIENT_SECRET` | `agent-gateway-portal` / empty | The portal's confidential client; the administrator gives you the secret. |
 | `PORTAL_SESSION_SECRET` | empty | Signs portal cookies, at least 32 bytes (`openssl rand -hex 32`). |
 | `GATEWAY_ISSUE_KEYS` | `false` | Allow gateway-issued `agk_` keys. |
 | `AUDIT_RETENTION_DAYS` | `365` | |
@@ -153,8 +153,8 @@ They are not in the root `.env`.
 | `UPSTREAM_API_KEY` | from `VLLM_API_KEY` in `.env` | The shared model key used for people who have not registered their own. Compose sets it; leave `VLLM_API_KEY` empty to require personal keys. |
 
 The Keycloak side (`integrations/keycloak/.env.keycloak`): `KEYCLOAK_URL`, `KEYCLOAK_REALM`,
-`KEYCLOAK_ADMIN_USER`, `KEYCLOAK_ADMIN_PASSWORD` (used by `apply.sh` only), `GATEWAY_PUBLIC_URL`, and for
-`make idp-up` `KEYCLOAK_DEV_IMAGE` / `KEYCLOAK_DEV_PORT`.
+`KEYCLOAK_ADMIN_USER`, `KEYCLOAK_ADMIN_PASSWORD` (used by `apply.sh` only, against the local development Keycloak),
+`GATEWAY_PUBLIC_URL`, and for `make idp-up` `KEYCLOAK_DEV_IMAGE` / `KEYCLOAK_DEV_PORT`.
 
 The Telegram bot's `LINK_MODE`, `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_SCOPE` are in
 `integrations/telegram-bot/.env` (see [`integrations/telegram-bot/README.md`](../integrations/telegram-bot/README.md)).

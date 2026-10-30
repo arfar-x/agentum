@@ -87,11 +87,11 @@ A module's scripts do the same against the module's own env file
 (`env_get NAME kb/.env`); `bash kb/scripts/prepare.test.sh` tests the one that
 creates it.
 
-Identity for the agent gateway, the portal and the Telegram bot is Keycloak: `make idp-realm-apply`
-(`integrations/keycloak/apply.sh`) creates/updates the `agentflow` realm from
-`integrations/keycloak/realm/agentflow-realm.json` and writes the generated client secrets into
-`.env.agent-gateway`; `make idp-up` starts a throwaway Keycloak for development; `make identity-e2e` checks
-the whole chain against one. People, groups and roles are managed only in Keycloak, never in the gateway
+Identity for the agent gateway, the portal and the Telegram bot is Keycloak, administered by the Keycloak
+administrator, never by this stack (`docs/KEYCLOAK_ADMIN_SETUP.md` lists what they create). For development
+only, `make idp-up` starts a throwaway Keycloak and `make idp-realm-apply`
+(`integrations/keycloak/apply.sh`, which refuses any non-loopback address) builds the `agentflow` realm on it
+from `integrations/keycloak/realm/agentflow-realm.json`; `make identity-e2e` checks the whole chain against one. People, groups and roles are managed only in Keycloak, never in the gateway
 ([`docs/RUNBOOK_IDENTITY.md`](docs/RUNBOOK_IDENTITY.md) is the operator's click-by-click). The gateway's own
 identity commands are `make gateway-key-*`, `gateway-creds-*`, `gateway-audit`, `gateway-owner-purge`, all
 keyed by `OWNER=<Keycloak account id>`.

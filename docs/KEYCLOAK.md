@@ -37,31 +37,21 @@ The full contract (mappers, scope mappings, lifetimes) is
 [`specs/003-identity-access/contracts/keycloak-realm.md`](../specs/003-identity-access/contracts/keycloak-realm.md);
 the template is [`integrations/keycloak/realm/agentflow-realm.json`](../integrations/keycloak/realm/agentflow-realm.json).
 
-## A1. Create the realm
+## A1. The realm
 
-```bash
-cp integrations/keycloak/.env.keycloak.example integrations/keycloak/.env.keycloak   # make idp-realm-apply does this
-chmod 600 integrations/keycloak/.env.keycloak
-# fill in KEYCLOAK_URL, KEYCLOAK_ADMIN_USER, KEYCLOAK_ADMIN_PASSWORD, GATEWAY_PUBLIC_URL
-cp .env.agent-gateway.example .env.agent-gateway   # if you have not yet; the secrets below go into it
-make idp-realm-apply
-```
+**On a real Keycloak the stack creates nothing.** The Keycloak administrator makes the realm, the clients,
+the client scopes, the roles, the groups and the people. [`IDENTITY_SETUP_GUIDE.md`](IDENTITY_SETUP_GUIDE.md)
+walks through it click by click, from Keycloak to a working login;
+[`KEYCLOAK_ADMIN_SETUP.md`](KEYCLOAK_ADMIN_SETUP.md) is the same as a flat checklist of every object and
+setting, and what to hand back. You then set in `.env.agent-gateway`: `OIDC_ISSUER=https://<keycloak-host>/realms/<realm>`
+(exactly the `iss` of tokens), `OIDC_AUDIENCE`, the portal and directory client ids and secrets,
+`PORTAL_BASE_URL` (the gateway's public address, if you want the portal) and `PORTAL_SESSION_SECRET`.
+`KB_TRUST_SECRET` is filled by `make up` (see [`CONFIGURATION.md`](CONFIGURATION.md)).
 
-No Keycloak yet and just trying it out? `make idp-up` first (a throwaway container on
-`127.0.0.1:8480`; `make idp-down` removes it and all its data).
-
-`make idp-realm-apply` creates the realm `agentflow` (only that realm; others are untouched), its clients,
-the two custom client scopes, the client roles, example groups and the scope mappings, and writes
-`DIRECTORY_CLIENT_SECRET` and `PORTAL_CLIENT_SECRET` into `.env.agent-gateway`. Secrets are never printed.
-**It is safe to rerun**: it brings the stack-owned parts (realm settings, scopes and mappers, clients, scope
-mappings, the directory account's read-only roles) back to the template, and it leaves alone what you manage:
-groups, the roles on a group, users and who is in which group are created once and never changed or removed
-by a rerun.
-
-Then set in `.env.agent-gateway`: `OIDC_ISSUER=https://<keycloak-host>/realms/agentflow` (exactly the `iss`
-of tokens), `PORTAL_BASE_URL` (the gateway's public address, if you want the portal) and
-`PORTAL_SESSION_SECRET`. `KB_TRUST_SECRET` is filled by `make up` (see
-[`CONFIGURATION.md`](CONFIGURATION.md)).
+**For development and tests only**, `make idp-up` starts a throwaway Keycloak on `127.0.0.1:8480`
+(`make idp-down` removes it and all its data) and `make idp-realm-apply` builds the `agentflow` realm on it
+from the template, writing the two client secrets into `.env.agent-gateway`. `apply.sh` refuses any address
+other than `localhost` / `127.0.0.1`, so it cannot be pointed at a real server.
 
 ## A2. Day to day
 

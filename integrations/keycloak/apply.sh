@@ -65,6 +65,16 @@ if [ -z "${SECRETS_FILE}" ] && [ "${NO_SECRETS}" = 0 ] && [ -f .env.agent-gatewa
 fi
 [ "${NO_SECRETS}" = 0 ] || SECRETS_FILE=""
 
+# Development and tests only. A real Keycloak's realm, clients and roles belong to its administrator
+# (docs/KEYCLOAK_ADMIN_SETUP.md); this script only runs against the throwaway one `make idp-up` starts.
+kc_host="${KC_URL#*://}"; kc_host="${kc_host%%[:/]*}"
+case "${kc_host}" in
+  localhost|127.0.0.1|keycloak-dev) ;;
+  *) echo "refusing to configure ${KC_URL}: apply.sh is for the local development Keycloak (make idp-up) only." >&2
+     echo "On a real Keycloak the administrator creates the realm; see docs/KEYCLOAK_ADMIN_SETUP.md." >&2
+     exit 1 ;;
+esac
+
 command -v jq >/dev/null || { echo "jq is required" >&2; exit 1; }
 command -v curl >/dev/null || { echo "curl is required" >&2; exit 1; }
 
