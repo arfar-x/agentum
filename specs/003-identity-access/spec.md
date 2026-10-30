@@ -140,17 +140,23 @@ person's key, not the deployment's.
 1. **Given** a signed-in person with no model key and no shared fallback, **when** they send a chat,
    **then** the call fails with a clear error naming the portal address where they can register
    their key, and nothing is sent upstream.
-2. **Given** a deployment that has `UPSTREAM_API_KEY` set, **when** a person with no key sends a
-   chat, **then** the shared key is used.
+2. **Given** any deployment, **when** a person with no key sends a chat, **then** there is no
+   shared fallback: the call fails as in scenario 1 (there is no `UPSTREAM_API_KEY`).
 3. **Given** a person who registers a key, **when** they register another, **then** the first stops
    working at once and only the second is accepted.
-4. **Given** a registered key, **when** it is used as the bearer, **then** the gateway recognises the
-   owner by the key's hash, builds that person's identity from the directory copy, and uses the same
-   key upstream.
+4. **Given** a registered key that only one person registered, **when** it is used as the bearer and
+   `GATEWAY_MODEL_KEY_LOGIN` allows it, **then** the gateway recognises the owner by the key's hash,
+   builds that person's identity from the directory copy, uses the same key upstream, and (in the
+   default `read-only` mode) offers no approval-gated write tool and refuses the raw model pass-through.
 5. **Given** a registered key, **when** anyone lists keys, **then** they see a label, a short
    fragment, dates and status and never the key.
-6. **Given** a key already registered by someone else, **when** a second person tries to register
-   the same key, **then** it is refused without saying whose it is.
+6. **Given** a key already registered by someone else, **when** a second person registers the same
+   string, **then** it is accepted (colleagues may share a provider key) and nothing tells them
+   anyone else holds it. **When** that string is then used as the bearer, **then** it identifies nobody:
+   401 `model_key_shared` ("This key is shared by several people, so it cannot identify you. Sign in
+   with Keycloak or use a gateway key."). Each person's stored tool credentials stay their own,
+   keyed by their Keycloak account, whatever string they present. When all but one holder revokes,
+   the remaining holder's string works as a login again; this is expected.
 7. **Given** a pass-through request (a model name that is not an agent), **when** the caller has their
    own key, **then** the pass-through uses it, and the caller's token or gateway key is never
    forwarded upstream.
@@ -400,13 +406,14 @@ Full text and status are in the specs of record. Plain-language map:
 | Spec of record | Meaning |
 |---|---|
 | gateway FR-IDN-01..08 | one identity (`sub`), the principal, the directory copy and its refresh, service principals, old data dropped |
-| gateway FR-ATH-01..12 | how a bearer is resolved; token checks; JWKS cache; key callers use the directory copy; keep-working-briefly; disabled people refused; startup check |
-| gateway FR-KEY-01..08 | registered model keys (hashed and encrypted), one active per person, issued keys only under the flag, listing without secrets, revoke, last used |
-| gateway FR-UPS-01..07 | every model call uses the caller's key; fallback; the pass-through substitutes the key; provider rejections explained |
+| gateway FR-ATH-01..14 | how a bearer is resolved (incl. `GATEWAY_MODEL_KEY_LOGIN` and the shared-key refusal); token checks; JWKS cache; key callers use the directory copy; keep-working-briefly; disabled people refused; startup check |
+| gateway FR-KEY-01..08 | registered model keys (hashed and encrypted), one active per person, the same string allowed for several people, issued keys only under the flag, listing without secrets, revoke, last used |
+| gateway FR-UPS-01..08 | every model call uses the caller's key; no shared fallback; the pass-through substitutes the key; provider rejections explained; credentials keyed by account only |
+| gateway FR-RTE-07..09 | pass-through path confinement, key scope, header allow-list |
 | gateway FR-ENT-01..10 | agent `access` by groups or roles and write rule likewise, models list, routing, handoffs, resume, write-tool hiding, key scope |
 | gateway FR-IDP-01..07 | the provider-neutral identity interface, Keycloak as the only adapter, read-only toward the provider, shared provider contract tests |
 | gateway FR-CRD-06..09 | list credential names, delete one variable, declared credentials with labels, keyed by `sub` |
-| gateway FR-PRT-01..12 | the portal: sign-in, cookie session, CSRF, key and credential pages, no secrets in pages, audit |
+| gateway FR-PRT-01..13 | the portal: sign-in, cookie session, CSRF, key and credential pages, no secrets in pages, audit |
 | gateway FR-AUD-01..06 | audit table, events, no secrets, listing, repeats collapsed, retention |
 | gateway FR-KBI-01..04 | forwarding groups and the trust secret to servers flagged `forward_identity` |
 | gateway FR-OPS-05..08 | commands for keys, credentials, audit, directory, owner purge |

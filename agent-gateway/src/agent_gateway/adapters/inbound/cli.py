@@ -26,7 +26,7 @@ from agent_gateway.application.portal import UndeclaredCredential, check_declare
 from agent_gateway.config import EnvSettings
 from agent_gateway.domain.access import access_warnings
 from agent_gateway.domain.errors import ConfigError
-from agent_gateway.domain.identity import DuplicateKey, KeyInfo, KeyIssuingDisabled, KeyScope
+from agent_gateway.domain.identity import KeyInfo, KeyIssuingDisabled, KeyScope
 
 StoreOpener = Callable[[], Awaitable[Any]]
 
@@ -135,11 +135,7 @@ async def run(args: argparse.Namespace, opener: StoreOpener, out=sys.stdout, *, 
                 if not secret:
                     print("error: no key on standard input", file=sys.stderr)
                     return 1
-                try:
-                    info = await keys.register_upstream(args.owner, args.label, secret, actor="cli")
-                except DuplicateKey:
-                    print("error: that key is already registered", file=sys.stderr)
-                    return 1
+                info = await keys.register_upstream(args.owner, args.label, secret, actor="cli")
                 print(f"registered {info.id} (ends in {info.prefix}); any previous key of {args.owner} is revoked", file=out)
             elif args.action == "create":
                 scope = KeyScope(tuple(a for a in (s.strip() for s in args.agents.split(",")) if a), not args.read_only)

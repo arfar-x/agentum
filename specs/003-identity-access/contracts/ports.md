@@ -75,8 +75,7 @@ class AuthError(Exception):
     retry_after: int | None = None      # seconds, for 503
 
 class KeyIssuingDisabled(Exception): ...    # GATEWAY_ISSUE_KEYS is off
-class DuplicateKey(Exception): ...          # the hash is registered already (say nothing about who)
-class NoUpstreamKey(Exception): ...         # no personal key and no UPSTREAM_API_KEY
+class NoUpstreamKey(Exception): ...         # the person registered no model key (there is no shared fallback)
 ```
 
 `AuthError.code` is one of the `auth.denied` reason codes in the data model. The HTTP layer maps:
@@ -163,7 +162,7 @@ class KeyService(Protocol):
         """Raises KeyIssuingDisabled when GATEWAY_ISSUE_KEYS is off. The secret is returned once."""
     async def register_upstream(self, owner: str, label: str, secret: str) -> KeyInfo:
         """Stores hash + encrypted secret, kind='upstream'. Revokes the owner's previous active
-        upstream key in the same transaction. Raises DuplicateKey."""
+        upstream key in the same transaction. Several people may register the same string."""
     async def resolve(self, bearer: str) -> KeyInfo | None:
         """Active key (not revoked, not expired) whose hash matches, any kind. Touches last_used_at
         (at most once a minute). For kind='issued' returns None when issuing is disabled."""
@@ -227,8 +226,7 @@ AgentAccess | None` where `AgentAccess(groups, roles, write_groups, write_roles)
 ```python
 class UpstreamCredentials(Protocol):
     async def for_principal(self, principal: Principal) -> str:
-        """Order: the person's registered upstream key; else the shared UPSTREAM_API_KEY; else
-        raises NoUpstreamKey."""
+        """The person's registered upstream key, else raises NoUpstreamKey."""
 ```
 
 The upstream LLM client takes the resolved key per call (`complete(..., api_key=...)`), never from

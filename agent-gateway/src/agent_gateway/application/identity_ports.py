@@ -100,12 +100,13 @@ class KeyService(Protocol):
     async def register_upstream(self, owner: str, label: str, secret: str,
                                 *, actor: str | None = None) -> KeyInfo:
         """Stores hash + encrypted secret, kind='upstream'. Revokes the owner's previous active
-        upstream key in the same transaction. Raises DuplicateKey."""
+        upstream key in the same transaction. Several people may register the same string."""
         ...
 
-    async def resolve(self, bearer: str) -> KeyInfo | None:
-        """Active key (not revoked, not expired) whose hash matches, any kind. Touches last_used_at
-        (at most once a minute). For kind='issued' returns None when issuing is disabled."""
+    async def resolve_all(self, bearer: str) -> list[KeyInfo]:
+        """Every active key (not revoked, not expired) whose hash matches, any kind; an issued key
+        is left out when issuing is disabled. More than one only for a shared model key. Touches
+        last_used_at (at most once a minute) when exactly one matches."""
         ...
 
     async def upstream_key(self, owner: str) -> str | None:
@@ -157,10 +158,10 @@ class KeyRecords(Protocol):
     async def add_key(self, new: NewKey, *, actor: str) -> tuple[KeyInfo, str | None]:
         """Insert the key and its audit entry in one transaction. For `upstream`, the owner's
         previous active key is revoked (secret wiped) first; its id is returned as the second
-        value. Raises DuplicateKey when the hash is active already."""
+        value. A model key's hash may repeat across owners; an issued key's may not."""
         ...
 
-    async def find_active(self, key_hash: str, now: datetime) -> KeyInfo | None: ...
+    async def find_active(self, key_hash: str, now: datetime) -> list[KeyInfo]: ...
     async def touch(self, key_id: str, now: datetime) -> None: ...
     async def upstream_secret(self, owner: str) -> bytes | None: ...
     async def list_for(self, owner: str) -> list[KeyInfo]: ...

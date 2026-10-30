@@ -122,9 +122,12 @@ the model endpoint above. Each model it offers is one of the gateway's agents
 (`agent-gateway/config/agents/`). Start it with `make gateway-up`; LibreChat
 reaches it at `http://agent-gateway:8080/v1` over the `gateway-api` network,
 which only `api` and the gateway share. The endpoint uses `user_provided` keys:
-each user pastes their own model key (registered in the gateway portal or with
-`make gateway-key-register OWNER=<account id>`) -- or, with `GATEWAY_ISSUE_KEYS=true`, a key made
-with `make gateway-key-create OWNER=<account id>` -- into LibreChat when first picking the endpoint. With the gateway stopped the
+each user pastes into LibreChat, when first picking the endpoint, either a gateway key (with
+`GATEWAY_ISSUE_KEYS=true`, made with `make gateway-key-create OWNER=<account id>`) or their own model key
+(registered in the gateway portal or with `make gateway-key-register OWNER=<account id>`). The model key
+identifies them only if nobody else registered the same string, and with the default
+`GATEWAY_MODEL_KEY_LOGIN=read-only` only for read-only use (no write tools, no direct model calls);
+see the table below. With the gateway stopped the
 model list falls back to the agents named in the template and chats fail until
 it is started.
 
@@ -148,9 +151,14 @@ They are not in the root `.env`.
 | `PORTAL_CLIENT_ID` / `PORTAL_CLIENT_SECRET` | `agent-gateway-portal` / empty | The portal's confidential client; `make idp-realm-apply` writes the secret. |
 | `PORTAL_SESSION_SECRET` | empty | Signs portal cookies, at least 32 bytes (`openssl rand -hex 32`). |
 | `GATEWAY_ISSUE_KEYS` | `false` | Allow gateway-issued `agk_` keys. |
+| `GATEWAY_MODEL_KEY_LOGIN` | `read-only` | Whether a person's own model key, presented as the bearer, identifies them: `off` never; `read-only` only when exactly one person registered that string, with no write tools and no raw model pass-through; `full` the same uniqueness rule with full permissions. A string several people registered identifies nobody (401 `model_key_shared`). Keycloak tokens and issued keys are unaffected. Any other value stops startup. |
 | `AUDIT_RETENTION_DAYS` | `365` | |
 | `KB_TRUST_SECRET` | generated | Shared with `mcp-kb`: `make up` generates it into `kb/.env` and copies it here. Empty on the gateway means no group is forwarded to the catalog, so restricted sources stay hidden. |
-| `UPSTREAM_API_KEY` | from `VLLM_API_KEY` in `.env` | The shared model key used for people who have not registered their own. Compose sets it; leave `VLLM_API_KEY` empty to require personal keys. |
+
+There is no shared model key. Every call the gateway makes uses the model key the person registered (portal
+or `make gateway-key-register`); a person without one gets `403 upstream_key_required`, and the gateway
+never falls back to `VLLM_API_KEY`. (`VLLM_*` stay in use by the other services.) Several people may
+register the same string; it then serves as their model key but cannot identify any of them as a login.
 
 The Keycloak side (`integrations/keycloak/.env.keycloak`): `KEYCLOAK_URL`, `KEYCLOAK_REALM`,
 `KEYCLOAK_ADMIN_USER`, `KEYCLOAK_ADMIN_PASSWORD` (used by `apply.sh` only), `GATEWAY_PUBLIC_URL`, and for

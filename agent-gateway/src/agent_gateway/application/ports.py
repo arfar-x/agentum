@@ -33,7 +33,7 @@ class UpstreamCredentials(Protocol):
     """Which model key a person's upstream calls are made with."""
 
     async def for_principal(self, principal: Principal) -> str:
-        """The person's registered key; else the shared ``UPSTREAM_API_KEY``; else ``UpstreamKeyRequired``."""
+        """The person's registered key, else ``UpstreamKeyRequired``."""
         ...
 
     def use(self, principal: Principal) -> AbstractAsyncContextManager[str]:

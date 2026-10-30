@@ -256,3 +256,26 @@ gateway does not accept Keycloak tokens yet.
     instead (`apply.sh`), which starts from a realm created with the built-ins.
 - **Idempotence**: a second `apply.sh` run creates nothing and changes nothing the operator owns. Groups,
   the roles on a group, and the people in them are seeded once and never rewritten.
+
+### D14. A model key is a login only when unique, read-only by default; shared keys allowed; no shared fallback key
+
+- **Decision**: (a) A person's own model key may be registered by several people (migration 006 keeps the
+  active-hash unique index only for `issued` keys; one active model key per person is unchanged). (b) The
+  same string presented as the bearer identifies a person only when exactly one owner has it active; with two
+  or more owners it is a 401 with audit reason `model_key_shared` and a message telling the caller to sign in
+  with Keycloak or use a gateway key. (c) `GATEWAY_MODEL_KEY_LOGIN` (`off` | `read-only` | `full`, default
+  `read-only`) decides whether this path exists at all and whether it carries write tools; a read-only login
+  gets `KeyScope(write=False)` and is refused on the raw model pass-through. (d) `UPSTREAM_API_KEY` is removed:
+  a person without a key gets `403 upstream_key_required`. Stored credentials and model keys are always read
+  and written by `Principal.user_id`, never by the key presented.
+- **Why**: Review finding H1 showed that treating every model key as a login made registration first-come,
+  first-served, let anyone who knew a widely shared provider key impersonate the registrant, turned a leaked
+  provider key into a gateway identity with write tools, and gave the 409 on duplicate registration as an
+  oracle. Clients such as LibreChat can only hold a pasted key, so the path is kept, but narrowed: ambiguity
+  means no identity, and the default carries no write or raw-model power. The shared fallback key made the
+  attribution and revocation of one person impossible and was the squat target.
+- **Consequence to expect**: when two people share a string and one revokes, the other's string starts
+  working as a login (read-only by default) without anyone touching it. That is intended and documented in the
+  runbook; operators who do not want it set `GATEWAY_MODEL_KEY_LOGIN=off`.
+- **Rejected**: refusing duplicate registration (reintroduces the squat and the oracle); refusing model keys
+  as bearers altogether (breaks LibreChat-style clients); keeping a shared fallback key.

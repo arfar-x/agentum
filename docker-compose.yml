@@ -399,7 +399,8 @@ services:
         condition: service_healthy
       mcp-agent-skills-gateway:
         condition: service_healthy
-    # Identity (OIDC_*, DIRECTORY_*, PORTAL_*, KB_TRUST_SECRET, GATEWAY_ISSUE_KEYS) is read from
+    # Identity (OIDC_*, DIRECTORY_*, PORTAL_*, KB_TRUST_SECRET, GATEWAY_ISSUE_KEYS,
+    # GATEWAY_MODEL_KEY_LOGIN). There is no shared model key: every person registers their own. is read from
     # .env.agent-gateway; see docs/KEYCLOAK.md. The gateway reaches the identity provider by its
     # public URL over the default bridge; it never needs `backend` for that.
     env_file:
@@ -407,7 +408,6 @@ services:
         required: false
     environment:
       UPSTREAM_BASE_URL: ${VLLM_BASE_URL:?set VLLM_BASE_URL in .env}
-      UPSTREAM_API_KEY: ${VLLM_API_KEY:-}
       DEFAULT_MODEL: ${VLLM_DEFAULT_MODEL:?set VLLM_DEFAULT_MODEL in .env}
       # Reported on /v1/models so clients can size their own budgets.
       MODEL_CONTEXT_TOKENS: ${MODEL_CONTEXT_TOKENS:-262144}

@@ -17,7 +17,7 @@ def settings(**extra):
 
 def test_issuing_keys_is_off_by_default_and_audit_is_kept_a_year():
     s = settings()
-    assert s.issue_keys is False and s.audit_retention_days == 365 and s.upstream_api_key == ""
+    assert s.issue_keys is False and s.audit_retention_days == 365 and s.model_key_login == "read-only" and not hasattr(s, "upstream_api_key")
 
 
 def test_the_flag_and_the_retention_are_parsed_once_with_the_documented_defaults():
@@ -25,7 +25,19 @@ def test_the_flag_and_the_retention_are_parsed_once_with_the_documented_defaults
     assert settings(GATEWAY_ISSUE_KEYS="1").issue_keys is True
     assert settings(GATEWAY_ISSUE_KEYS="false").issue_keys is False
     assert settings(AUDIT_RETENTION_DAYS="30").audit_retention_days == 30
-    assert settings(UPSTREAM_API_KEY="sk-shared").upstream_api_key == "sk-shared"
+    assert settings(UPSTREAM_API_KEY="sk-leftover").model_key_login == "read-only"       # the setting is gone, ignored
+    assert not hasattr(settings(UPSTREAM_API_KEY="sk-leftover"), "upstream_api_key")
+
+
+def test_the_model_key_login_mode_defaults_to_read_only_and_rejects_unknown_values():
+    # Covers: FR-ATH-13
+    for mode in ("off", "read-only", "full"):
+        assert settings(GATEWAY_MODEL_KEY_LOGIN=mode).model_key_login == mode
+    assert settings(GATEWAY_MODEL_KEY_LOGIN=" FULL ").model_key_login == "full"
+    assert settings(GATEWAY_MODEL_KEY_LOGIN="").model_key_login == "read-only"
+    with pytest.raises(ConfigError, match="GATEWAY_MODEL_KEY_LOGIN") as err:
+        settings(GATEWAY_MODEL_KEY_LOGIN="yes-sk-secret")
+    assert "sk-secret" not in str(err.value)
 
 
 def test_a_bad_value_stops_startup_naming_the_variable_but_not_its_value():

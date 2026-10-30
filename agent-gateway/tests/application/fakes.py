@@ -36,7 +36,6 @@ from agent_gateway.domain.identity import (
     AuditEvent,
     AuthError,
     DirectoryEntry,
-    DuplicateKey,
     KeyInfo,
     Principal,
     clean_groups,
@@ -364,16 +363,15 @@ class FakeKeyRecords:
 
     async def add_key(self, new: NewKey, *, actor: str):
         replaced = None
-        snapshot = {k: dict(v) for k, v in self.rows.items()}
         if new.kind == "upstream":
             for row in self.rows.values():
                 i = row["info"]
                 if i.owner == new.owner and i.kind == "upstream" and i.revoked_at is None:
                     row["info"], row["secret_enc"] = replace(i, revoked_at=self.now()), None
                     replaced = i.id
-        if any(r["key_hash"] == new.key_hash and r["info"].revoked_at is None for r in self.rows.values()):
-            self.rows = snapshot                        # the whole change is undone, as in a transaction
-            raise DuplicateKey("that key is already registered")
+        if new.kind == "issued" and any(r["key_hash"] == new.key_hash and r["info"].revoked_at is None
+                                        and r["info"].kind == "issued" for r in self.rows.values()):
+            raise AssertionError("an issued key's hash must stay unique")      # the real index refuses it
         info = KeyInfo(str(uuid.uuid4()), new.owner, new.kind, new.label, new.prefix, new.scope,
                        self.now(), new.expires_at, None, None)
         self.rows[info.id] = {"info": info, "key_hash": new.key_hash, "secret_enc": new.secret_enc}
@@ -381,10 +379,7 @@ class FakeKeyRecords:
         return info, replaced
 
     async def find_active(self, key_hash, now):
-        for row in self.rows.values():
-            if row["key_hash"] == key_hash and is_active(row["info"], now):
-                return row["info"]
-        return None
+        return [r["info"] for r in self.rows.values() if r["key_hash"] == key_hash and is_active(r["info"], now)]
 
     async def touch(self, key_id, now):
         row = self.rows[key_id]

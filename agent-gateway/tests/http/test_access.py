@@ -29,6 +29,8 @@ async def _gateway(make_gateway, agents):
     async def resolve(request: Request) -> Principal:
         bearer = request.headers["authorization"].split(" ", 1)[1]
         principal = PEOPLE[bearer]
+        if principal.user_id not in gw.container.keys.upstream:
+            gw.container.keys.register(principal.user_id, f"sk-model-{principal.user_id}-0000")
         request.state.principal = principal
         return principal
 

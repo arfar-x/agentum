@@ -222,9 +222,11 @@ the agent allows it. Specified in [`agent-gateway/docs/spec.md`](../agent-gatewa
 window.
 
 **Auth and limits.** Identity is a Keycloak account (`sub`). A request carries a Keycloak access token
-(the Telegram bot, the portal, automations), or the person's own registered model key, or, only with
-`GATEWAY_ISSUE_KEYS`, a gateway-issued key. The gateway resolves the caller to a person, their groups and
-their roles, decides which agents they may use, and calls the model with their own key. State (threads,
+(the Telegram bot, the portal, automations), or, only with
+`GATEWAY_ISSUE_KEYS`, a gateway-issued key, or the person's own registered model key when exactly one person
+registered that string (`GATEWAY_MODEL_KEY_LOGIN`, read-only by default). The gateway resolves the caller to a person, their groups and
+their roles, decides which agents they may use, and calls the model with their own key (there is no shared
+fallback key). State (threads,
 credentials, paused turns, audit) is scoped to the account id. Keycloak is the only place people, groups and
 roles are managed; the gateway reads them from tokens and from a periodic read-only copy. See
 [`KEYCLOAK.md`](KEYCLOAK.md) and [`specs/003-identity-access`](../specs/003-identity-access/spec.md). Rate

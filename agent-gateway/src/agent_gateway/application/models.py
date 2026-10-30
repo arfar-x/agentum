@@ -99,10 +99,9 @@ class TurnRequest:
 
 @dataclass(frozen=True)
 class UpstreamKey:
-    """The model key one person's calls are made with. ``personal`` is False for the shared fallback."""
+    """The model key one person's calls are made with: always the person's own."""
 
     secret: str = field(repr=False)
-    personal: bool
 
 
 @dataclass

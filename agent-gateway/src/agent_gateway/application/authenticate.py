@@ -14,7 +14,14 @@ from agent_gateway.application.identity_ports import (
     KeyService,
     TokenVerifier,
 )
-from agent_gateway.domain.identity import ISSUED_KEY_PREFIX, AuthError, KeyInfo, Principal
+from agent_gateway.domain.identity import (
+    ISSUED_KEY_PREFIX,
+    READ_ONLY_SCOPE,
+    AuthError,
+    KeyInfo,
+    KeyScope,
+    Principal,
+)
 
 log = logging.getLogger("agent_gateway.auth")
 
@@ -28,9 +35,10 @@ RETRY_AFTER = 30
 class Authenticator:
     def __init__(self, keys: KeyService, tokens: TokenVerifier, directory: DirectoryStore,
                  sync: DirectorySync, audit: AuditLog, *, issue_keys: bool, max_stale: timedelta,
-                 now: Callable[[], datetime]) -> None:
+                 now: Callable[[], datetime], model_key_login: str = "read-only") -> None:
         self._keys, self._tokens, self._directory, self._sync = keys, tokens, directory, sync
         self._audit, self._issue_keys, self._max_stale, self._now = audit, issue_keys, max_stale, now
+        self._model_key_login = model_key_login
         self._first_use: dict[tuple[str, str], datetime] = {}
 
     async def authenticate(self, bearer: str | None, *, path: str = "") -> Principal:
@@ -41,7 +49,7 @@ class Authenticator:
             bearer = bearer.strip()
             if len(bearer.encode()) > MAX_BEARER_BYTES:
                 raise AuthError("malformed")
-            info = await self._keys.resolve(bearer)
+            info = self._recognised(await self._keys.resolve_all(bearer))
             if info is not None:
                 actor = info.owner
                 return await self._key_caller(info)
@@ -51,6 +59,25 @@ class Authenticator:
             raise
 
     # ---- a registered or issued key
+
+    def _recognised(self, found: list[KeyInfo]) -> KeyInfo | None:
+        """The one key this bearer identifies a person by, or None (then it may still be a token).
+
+        An issued key is unique and always identifies its owner. A model key identifies a person
+        only while `GATEWAY_MODEL_KEY_LOGIN` allows it and exactly one owner has it registered."""
+        for info in found:
+            if info.kind == "issued":
+                return info
+        if not found or self._model_key_login == "off":
+            return None
+        if len({i.owner for i in found}) > 1:
+            raise AuthError("model_key_shared")
+        return found[0]
+
+    def _scope_of(self, info: KeyInfo) -> KeyScope:
+        if info.kind == "upstream":
+            return READ_ONLY_SCOPE if self._model_key_login == "read-only" else KeyScope()
+        return info.scope
 
     async def _key_caller(self, info: KeyInfo) -> Principal:
         entry = await self._directory.lookup(info.owner)
@@ -67,7 +94,7 @@ class Authenticator:
         if not entry.enabled:
             raise AuthError("person_disabled")
         return Principal(entry.user_id, entry.username, entry.groups, entry.roles, entry.kind,
-                         key_id=info.id, scope=info.scope)
+                         key_id=info.id, scope=self._scope_of(info))
 
     # ---- a token
 

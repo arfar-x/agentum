@@ -4,8 +4,8 @@
 
 | Header | Direction | Value | Rule |
 |---|---|---|---|
-| `Authorization: Bearer <x>` | client → gateway | a Keycloak access token, or a registered model key, or (flag on) an `agk_` key | resolution order in FR-ATH-01. Maximum 8 KiB. |
-| `Authorization: Bearer <key>` | gateway → model endpoint | the caller's own model key; else `UPSTREAM_API_KEY` | the caller's own `Authorization` is never forwarded. |
+| `Authorization: Bearer <x>` | client → gateway | a Keycloak access token, or a registered model key that exactly one person registered (per `GATEWAY_MODEL_KEY_LOGIN`), or (flag on) an `agk_` key | resolution order in FR-ATH-01, FR-ATH-13, FR-ATH-14. Maximum 8 KiB. |
+| `Authorization: Bearer <key>` | gateway → model endpoint | the caller's own model key (no shared fallback) | the caller's own `Authorization` is never forwarded. On the pass-through only `content-type`, `accept`, `user-agent`, `openai-organization`, `openai-project`, `openai-beta`, `x-request-id` and `x-client-request-id` are forwarded (FR-RTE-09). |
 | `X-KB-Groups` | gateway → `mcp-kb` | comma-separated group names, no spaces around commas, e.g. `product,engineering` | honoured only with a valid `X-KB-Trust`. Names with commas or control characters are dropped by the sender. At most 64 names, 4 KiB. |
 | `X-KB-Trust` | gateway → `mcp-kb` | the value of `KB_TRUST_SECRET` | compared in constant time. Sent only to servers flagged `forward_identity`. Never logged, never in model context. |
 | `X-Agent-Skills-Env-<VAR>` | gateway → `agent-skills` | credential value | unchanged by this work. |
@@ -29,7 +29,7 @@ All use OpenAI's error object `{"error": {"message", "type", "param", "code"}}`.
 |---|---|---|---|
 | no bearer, malformed, bad signature, expired, wrong audience/issuer/algorithm, unknown or revoked or expired key, issuing disabled, unknown person, person disabled | 401 | `invalid_request_error` | `invalid_api_key` |
 | key caller with a stale directory snapshot | 503 | `server_error` | `identity_unavailable` (header `Retry-After: 30`) |
-| no personal model key and no shared key | 403 | `invalid_request_error` | `upstream_key_required`; message names `PORTAL_BASE_URL/portal` when set |
+| no personal model key | 403 | `invalid_request_error` | `upstream_key_required`; message names `PORTAL_BASE_URL/portal` when set |
 | provider rejected the person's model key (401/403 from upstream) | 502 | `server_error` | `upstream_key_rejected`; message says the key was refused by the model service and where to replace it |
 | agent not permitted | 404 | `invalid_request_error` | `model_not_found` (identical to an unknown model) |
 | portal form without valid CSRF or origin | 403 | n/a (HTML) | n/a |
@@ -43,7 +43,7 @@ The 401 message never says which check failed (the reason is only in the audit l
 | Variable | Default | Secret | Meaning |
 |---|---|---|---|
 | `GATEWAY_ISSUE_KEYS` | `false` | no | allow gateway-issued `agk_` keys |
-| `UPSTREAM_API_KEY` | empty | yes | shared fallback model key (exists today) |
+| `GATEWAY_MODEL_KEY_LOGIN` | `read-only` | no | `off`, `read-only` or `full`: whether a person's own model key used as the bearer identifies them (only when exactly one person registered it); `read-only` removes write tools and the raw pass-through. Any other value stops startup. `UPSTREAM_API_KEY` no longer exists. |
 | `IDENTITY_PROVIDER` | `keycloak` | no | which identity-provider adapter to build; `keycloak` is the only value implemented, any other stops startup and names the allowed values |
 | `OIDC_ISSUER` | none (required) | no | issuer URL, e.g. `https://kc.example.org/realms/agentflow` |
 | `OIDC_AUDIENCE` | `agent-gateway` | no | required `aud` |

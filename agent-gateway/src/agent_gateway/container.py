@@ -109,14 +109,15 @@ async def build_container(env: EnvSettings, *, portal_login: Any = None) -> Cont
         settings=config.settings, retriever=retriever, aliases=config.aliases,
         cache=RedisTextCache(redis), ask_tools=ask_registry(config.ask_tools))
     keys = KeyManager(store, vault, issue_keys=env.issue_keys, now=lambda: datetime.now(timezone.utc))
-    credentials = UpstreamKeys(keys, env.upstream_api_key, store.audit, env.portal_base_url)
+    credentials = UpstreamKeys(keys, store.audit, env.portal_base_url)
     deps = dataclasses.replace(deps, upstream=credentials)
     provider = _provider_module(env).build(env.environ)
     now = lambda: datetime.now(timezone.utc)  # noqa: E731
     sync = DirectorySync(provider.directory, store.directory, store.audit, now=now)
     authenticator = Authenticator(keys, provider.tokens, store.directory, sync, store.audit,
                                   issue_keys=env.issue_keys,
-                                  max_stale=timedelta(seconds=env.directory_max_stale_seconds), now=now)
+                                  max_stale=timedelta(seconds=env.directory_max_stale_seconds), now=now,
+                                  model_key_login=env.model_key_login)
     portal = None
     if env.portal_base_url:
         portal_login = portal_login or provider.login
@@ -127,7 +128,7 @@ async def build_container(env: EnvSettings, *, portal_login: Any = None) -> Cont
         portal = PortalDeps(
             base_url=env.portal_base_url, session_secret=env.portal_session_secret, login=portal_login,
             directory=store.directory, keys=keys, audit=store.audit, creds=store, tools=tools,
-            servers=config.servers, issue_keys=env.issue_keys,
+            servers=config.servers, issue_keys=env.issue_keys, model_key_login=env.model_key_login,
             agent_ids=lambda entry: sorted(config.agents))
     return Container(config, deps, keys, RedisLock(redis), RedisRateLimiter(redis), upstream,
                      credentials, LangGraphDriver(),

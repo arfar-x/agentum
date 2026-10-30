@@ -1,4 +1,4 @@
-"""Which model key a call is made with: the person's own, else the deployment's shared one."""
+"""Which model key a call is made with: the person's own. There is no shared fallback."""
 
 from __future__ import annotations
 
@@ -16,9 +16,8 @@ REFUSED = (401, 403)
 class UpstreamKeys:
     """Implements ``UpstreamCredentials``."""
 
-    def __init__(self, keys: KeyService, shared_key: str = "", audit: AuditLog | None = None,
-                 portal_url: str = "") -> None:
-        self._keys, self._shared, self._audit, self._portal = keys, shared_key.strip(), audit, portal_url.strip()
+    def __init__(self, keys: KeyService, audit: AuditLog | None = None, portal_url: str = "") -> None:
+        self._keys, self._audit, self._portal = keys, audit, portal_url.strip()
 
     def _where_to_register(self) -> str:
         cli = "`python -m agent_gateway key register-llm`"
@@ -27,18 +26,13 @@ class UpstreamKeys:
     async def resolve(self, principal: Principal) -> UpstreamKey:
         personal = await self._keys.upstream_key(principal.user_id)
         if personal:
-            return UpstreamKey(personal, True)
-        if self._shared:
-            return UpstreamKey(self._shared, False)
+            return UpstreamKey(personal)
         raise UpstreamKeyRequired(f"No model key is registered for you. Register yours in {self._where_to_register()}.")
 
     async def for_principal(self, principal: Principal) -> str:
         return (await self.resolve(principal)).secret
 
     async def rejected(self, principal: Principal, key: UpstreamKey, status: int) -> UpstreamKeyRejected:
-        if not key.personal:
-            return UpstreamKeyRejected("The model provider refused the deployment's shared model key. "
-                                       "Ask the operator to replace UPSTREAM_API_KEY.")
         if self._audit is not None:
             infos = await self._keys.list_for(principal.user_id)
             current = next((i.id for i in infos if i.kind == "upstream" and i.revoked_at is None), "")

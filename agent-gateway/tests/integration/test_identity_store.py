@@ -13,14 +13,15 @@ from pathlib import Path
 import psycopg
 import pytest
 from psycopg.conninfo import make_conninfo
+from psycopg.errors import UniqueViolation
 
 from agent_gateway.adapters.inbound.cli import parser, run
 from agent_gateway.adapters.outbound.crypto import Vault
 from agent_gateway.adapters.outbound.postgres_store import PostgresStore
-from agent_gateway.application.identity_ports import Account
+from agent_gateway.application.identity_ports import Account, NewKey
 from agent_gateway.application.key_service import KeyManager
 from agent_gateway.application.models import PendingTurn, Thread
-from agent_gateway.domain.identity import DuplicateKey, KeyIssuingDisabled, KeyScope, hash_key
+from agent_gateway.domain.identity import KeyIssuingDisabled, KeyScope, hash_key
 from agent_gateway.domain.messages import ChatMessage, FunctionCall, ToolCall
 
 pytestmark = pytest.mark.services
@@ -131,17 +132,19 @@ async def test_a_model_key_is_hashed_and_encrypted_and_one_person_has_one_active
     assert audit[0].detail["replaced"] == first.id
 
 
-async def test_a_duplicate_key_is_refused_without_saying_whose_and_leaves_the_earlier_key_active(store):
+async def test_a_model_key_may_be_held_by_several_people_but_an_issued_key_stays_unique(store):
     # Covers: FR-KEY-03
     keys = keys_of(store)
-    await keys.register_upstream("alice", "", MODEL_KEY)
-    bobs = await keys.register_upstream("bob", "", "sk-bob-own-key-4321")
-    with pytest.raises(DuplicateKey) as err:
-        await keys.register_upstream("bob", "", MODEL_KEY)
-    assert "alice" not in str(err.value) and "bob" not in str(err.value)
-    assert await keys.upstream_key("bob") == "sk-bob-own-key-4321"
-    assert (await rows(store, "SELECT revoked_at IS NULL FROM api_keys WHERE id=%s::uuid", bobs.id)) == [(True,)]
-    assert len(await store.audit.recent(10, action="key.register")) == 2        # the refused attempt left nothing
+    a = await keys.register_upstream("alice", "", MODEL_KEY)
+    b = await keys.register_upstream("bob", "", MODEL_KEY)                   # no refusal
+    assert {i.owner for i in await keys.resolve_all(MODEL_KEY)} == {"alice", "bob"}
+    assert await keys.upstream_key("alice") == await keys.upstream_key("bob") == MODEL_KEY
+    await keys.revoke("alice", a.id)
+    assert [i.id for i in await keys.resolve_all(MODEL_KEY)] == [b.id]
+    assert await keys.upstream_key("alice") is None and await keys.upstream_key("bob") == MODEL_KEY
+    secret, issued = await keys.issue("alice", "", KeyScope(), None)
+    with pytest.raises(UniqueViolation):                                     # the index still guards issued keys
+        await store.add_key(NewKey("bob", "issued", "", "agk_", hash_key(secret), None, KeyScope(), None), actor="bob")
 
 
 async def test_issuing_needs_the_flag_and_an_issued_key_authenticates_only_while_it_is_on(store):
@@ -155,8 +158,8 @@ async def test_issuing_needs_the_flag_and_an_issued_key_authenticates_only_while
     (stored,) = await rows(store, "SELECT key_hash, secret_enc, scope FROM api_keys")
     assert stored[0] == hash_key(secret) and secret not in stored[0] and stored[1] is None
     assert stored[2] == {"agents": ["tasks"], "write": False}
-    assert (await on.resolve(secret)).owner == "alice"
-    assert await keys_of(store, issue=False).resolve(secret) is None
+    assert [i.owner for i in await on.resolve_all(secret)] == ["alice"]
+    assert await keys_of(store, issue=False).resolve_all(secret) == []
 
 
 async def test_keys_resolve_until_revoked_or_expired_and_revocation_is_owner_scoped(store):
@@ -166,13 +169,13 @@ async def test_keys_resolve_until_revoked_or_expired_and_revocation_is_owner_sco
     short, _ = await keys.issue("alice", "short", KeyScope(), now() + timedelta(milliseconds=1))
     async with store._pool.connection() as c:
         await c.execute("UPDATE api_keys SET expires_at = now() - interval '1 second' WHERE label='short'")
-    assert await keys.resolve(short) is None
+    assert await keys.resolve_all(short) == []
     listing = await keys.list_for("alice")
     assert {k.label for k in listing} == {"laptop", "short"} and secret not in repr(listing)
     assert not await keys.revoke("bob", info.id)
-    assert await keys.resolve(secret) is not None
+    assert await keys.resolve_all(secret) != []
     assert await keys.revoke("alice", info.id)
-    assert await keys.resolve(secret) is None
+    assert await keys.resolve_all(secret) == []
     assert not await keys.revoke(None, info.id)
     assert (await store.audit.recent(1, action="key.revoke"))[0].detail == {"by": "owner"}
 
@@ -181,14 +184,14 @@ async def test_last_used_moves_at_most_once_a_minute(store):
     # Covers: FR-KEY-08
     keys = keys_of(store)
     secret, info = await keys.issue("alice", "", KeyScope(), None)
-    await keys.resolve(secret)
+    await keys.resolve_all(secret)
     (first,) = (await rows(store, "SELECT last_used_at FROM api_keys"))[0]
     assert first is not None
-    await keys.resolve(secret)
+    await keys.resolve_all(secret)
     assert (await rows(store, "SELECT last_used_at FROM api_keys"))[0][0] == first
     async with store._pool.connection() as c:
         await c.execute("UPDATE api_keys SET last_used_at = last_used_at - interval '2 minutes'")
-    await keys.resolve(secret)
+    await keys.resolve_all(secret)
     assert (await rows(store, "SELECT last_used_at FROM api_keys"))[0][0] > first - timedelta(minutes=2)
 
 
@@ -244,11 +247,10 @@ async def test_a_change_and_its_audit_entry_succeed_or_fail_together_and_nothing
     dump = json.dumps([(e.actor, e.action, e.target, e.detail) for e in events])
     assert MODEL_KEY not in dump and "hunter2" not in dump
     before = len(await store.audit.recent(100))
-    with pytest.raises(DuplicateKey):
-        a = keys_of(store)
-        await a.register_upstream("a", "", "same-key-1234")
-        await a.register_upstream("b", "", "same-key-1234")
-    assert len(await store.audit.recent(100)) == before + 1
+    a = keys_of(store)
+    await a.register_upstream("a", "", "same-key-1234")
+    await a.register_upstream("b", "", "same-key-1234")
+    assert len(await store.audit.recent(100)) == before + 2
 
 
 async def test_the_directory_copy_is_replaced_in_one_transaction_and_a_failure_changes_nothing(store):
@@ -327,7 +329,7 @@ async def test_the_cli_registers_a_model_key_from_stdin_issues_only_when_enabled
     capfd.readouterr()
     code, _ = await cli(store, "key", "register-llm", "--owner", "sub-2", stdin=MODEL_KEY)
     err = capfd.readouterr().err
-    assert code == 1 and "already registered" in err and "sub-1" not in err
+    assert code == 0 and err == ""                       # a key held by someone else is accepted, silently
     assert (await cli(store, "key", "register-llm", "--owner", "sub-3", stdin=""))[0] == 1
 
     capfd.readouterr()
@@ -343,9 +345,9 @@ async def test_the_cli_registers_a_model_key_from_stdin_issues_only_when_enabled
     assert MODEL_KEY not in listing and secret not in listing
     assert (await cli(store, "key", "list", "--owner", "nobody"))[1] == ""
 
-    key_id = (await keys_of(store).resolve(secret)).id
+    key_id = (await keys_of(store).resolve_all(secret))[0].id
     assert (await cli(store, "key", "revoke", key_id))[0] == 0
-    assert await keys_of(store).resolve(secret) is None
+    assert await keys_of(store).resolve_all(secret) == []
     assert (await cli(store, "key", "revoke", key_id))[0] == 1
     assert (await store.audit.recent(1, action="key.revoke"))[0].actor == "cli"
 

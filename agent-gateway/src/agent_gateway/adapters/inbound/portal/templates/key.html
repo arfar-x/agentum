@@ -2,7 +2,13 @@
 {% block title %}Model key{% endblock %}
 {% block content %}
 <h1>My model key</h1>
-<p>The key you register here is used for the language-model calls made on your behalf. It is write-only: it is never shown again.</p>
+<p>The key you register here is used to call the model on your behalf. It is write-only: it is never shown again.</p>
+{% if login_mode == "off" %}
+<p>This gateway does not accept a model key as a login. To call the gateway from a program, sign in with Keycloak or ask for a gateway key.</p>
+{% else %}
+<p>The key can also act as your login to the gateway, but only if nobody else registered the same string{% if login_mode == "read-only" %}, and only for read-only use: tools that change things are never offered to a call made this way{% endif %}.
+If you share a key with colleagues and they register it too, it stops working as a login for all of you; you can still use it to call the model. Sign in with Keycloak or use a gateway key instead.</p>
+{% endif %}
 {% if key %}
 <dl>
   <dt>Label</dt><dd>{{ key.label or "none" }}</dd>
