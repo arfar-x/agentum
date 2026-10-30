@@ -87,6 +87,15 @@ A module's scripts do the same against the module's own env file
 (`env_get NAME kb/.env`); `bash kb/scripts/prepare.test.sh` tests the one that
 creates it.
 
+Identity for the agent gateway, the portal and the Telegram bot is Keycloak, administered by the Keycloak
+administrator, never by this stack (`docs/KEYCLOAK_ADMIN_SETUP.md` lists what they create). For development
+only, `make idp-up` starts a throwaway Keycloak and `make idp-realm-apply`
+(`integrations/keycloak/apply.sh`, which refuses any non-loopback address) builds the `agentflow` realm on it
+from `integrations/keycloak/realm/agentflow-realm.json`; `make identity-e2e` checks the whole chain against one. People, groups and roles are managed only in Keycloak, never in the gateway
+([`docs/RUNBOOK_IDENTITY.md`](docs/RUNBOOK_IDENTITY.md) is the operator's click-by-click). The gateway's own
+identity commands are `make gateway-key-*`, `gateway-creds-*`, `gateway-audit`, `gateway-owner-purge`, all
+keyed by `OWNER=<Keycloak account id>`.
+
 User account management also goes through `make user-*` targets (create,
 list, ban, invite, delete, reset-password) -- see README.md "Managing
 users" for the full list and what each wraps. Role/permission management
@@ -276,8 +285,13 @@ it.
   proposals). agentflow stops at the ticket;
   the team's conventions live in `agents/*.yaml`, the generic spec skills in
   `agent-skills`.
-- [`docs/KEYCLOAK.md`](docs/KEYCLOAK.md) -- optional SSO, and how to
-  switch to/from local email/password auth.
+- [`docs/KEYCLOAK.md`](docs/KEYCLOAK.md) -- the `agentflow` realm (identity for the gateway, portal and
+  Telegram bot), and optional LibreChat SSO with how to switch to/from local email/password auth.
+- [`docs/RUNBOOK_IDENTITY.md`](docs/RUNBOOK_IDENTITY.md) -- "I want to X, here is the click or command" for
+  the operator: users, groups, roles, keys, credentials, Telegram, audit, backup, Keycloak down; plus a
+  glossary.
+- `integrations/keycloak/` -- the realm template, the idempotent `apply.sh`, the dev Keycloak, the make
+  targets (`module.mk`). Identity is specified in `specs/003-identity-access/`.
 - [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) -- specific known
   failure modes (e.g. MCP tools missing from the tool picker).
 - A module's spec of record lives in the module (`kb/docs/SPEC.md`): anything

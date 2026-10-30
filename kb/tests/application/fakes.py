@@ -24,6 +24,7 @@ from kb.domain.entry import Entry, EntryType
 from kb.domain.merge import Override
 from kb.domain.runs import INTERRUPTED, RunStatus, Trigger, final_status
 from kb.domain.text import normalize, normalize_all
+from kb.domain.visibility import Caller
 
 
 class FakeClock:
@@ -48,10 +49,34 @@ class FakeEntryStore:
         self.contents: dict[str, tuple[RawContent, str | None]] = {}
         self.upserts = 0
         self.touches = 0
+        #: source id -> groups (empty = unrestricted); no key = invisible, as in
+        #: the real table. `upsert` adds an unrestricted row for a new source,
+        #: standing in for the scheduler having recorded it first.
+        self.visibility: dict[str, tuple[str, ...]] = {}
 
     # -- reads -------------------------------------------------------------
     def get(self, entry_id: str) -> Entry | None:
         return self.entries.get(entry_id)
+
+    def _visible(self, entry: Entry, caller: Caller) -> bool:
+        if caller.operator:
+            return True
+        groups = self.visibility.get(entry.source_id)
+        return groups is not None and caller.can_see(groups)
+
+    def get_visible(self, entry_id: str, caller: Caller) -> Entry | None:
+        entry = self.entries.get(entry_id)
+        return entry if entry is not None and self._visible(entry, caller) else None
+
+    def apply_visibility(self, groups_by_source, *, at) -> None:
+        for source_id, groups in groups_by_source.items():
+            self.visibility[source_id] = tuple(groups)
+        for source_id in list(self.visibility):
+            if source_id not in groups_by_source and not self.ids_for_source(source_id):
+                del self.visibility[source_id]
+
+    def source_groups(self) -> dict[str, tuple[str, ...]]:
+        return dict(self.visibility)
 
     def get_many(self, entry_ids: Sequence[str]) -> dict[str, Entry]:
         return {i: self.entries[i] for i in entry_ids if i in self.entries}
@@ -76,11 +101,14 @@ class FakeEntryStore:
         types: Sequence[EntryType] | None = None,
         tags: Sequence[str] | None = None,
         limit: int = 30,
+        caller: Caller,
     ) -> list[str]:
         terms = [t for t in normalized_query.split() if t]
         scored: list[tuple[int, str]] = []
         for entry in self.entries.values():
             if entry.deleted_at is not None:
+                continue
+            if not self._visible(entry, caller):
                 continue
             if types and entry.type not in types:
                 continue
@@ -106,6 +134,7 @@ class FakeEntryStore:
 
     # -- writes ------------------------------------------------------------
     def upsert(self, entry: Entry) -> None:
+        self.visibility.setdefault(entry.source_id, ())
         self.entries[entry.id] = entry
         self.upserts += 1
 

@@ -104,6 +104,9 @@ class Scheduler:
         #: When the manual records were last found out of step with the catalog
         #: and published, so a persistent failure is retried, not hammered.
         self._forms_attempted: datetime | None = None
+        #: The groups last written to `source_visibility`, so an unchanged
+        #: configuration costs no write per tick.
+        self._applied_visibility: dict[str, tuple[str, ...]] | None = None
         # Optional collaborators: a container without them (a unit test of one
         # concern) simply has no history, queue or heartbeat.
         self._runs = getattr(container, "runs", None)
@@ -174,6 +177,7 @@ class Scheduler:
             config, config_error = None, str(exc)
 
         self._beat(now, config, config_error)
+        self._apply_visibility(config)
         # What a person asked for goes first: somebody is waiting on it.
         self._serve_requests(config, config_error)
         self._publish_pending_forms(now)
@@ -184,6 +188,30 @@ class Scheduler:
         for job in jobs:
             self._run(job, config, now)
         return jobs
+
+    # -- visibility (FR-VIS-03) ---------------------------------------------
+    def _apply_visibility(self, config: SourcesConfig | None, *, force: bool = False) -> None:
+        """Make `source_visibility` say what the configuration says.
+
+        On every tick where it changed (so tightening a source's groups takes
+        effect within one tick, not at its next sync) and, via `force`, before
+        any run writes a source's entries. The built-in `form` source is always
+        unrestricted. An unreadable configuration leaves the table as it was:
+        the rows already there keep protecting what they protect.
+        """
+        if config is None and not force:
+            return
+        wanted = {**(config.visibility() if config else {}), FORM_SOURCE_ID: ()}
+        if not force and wanted == self._applied_visibility:
+            return
+        try:
+            self._container.store.apply_visibility(wanted, at=self._now())
+            self._applied_visibility = wanted
+        except Exception:
+            logger.exception("could not record source visibility; will retry")
+            self._applied_visibility = None
+            if force:
+                raise
 
     # -- the pulse ---------------------------------------------------------
     def _beat(self, now: datetime, config: SourcesConfig | None, config_error: str | None) -> None:
@@ -358,7 +386,14 @@ class Scheduler:
             retired = store.mark_missing(
                 store.ids_for_source(source_id or ""), at=self._container.clock.now()
             )
+            # With its entries gone, a removed source's row can go too (FR-VIS-05).
+            self._apply_visibility(config, force=True)
             return _Result(counts={"missing": retired})
+
+        if not dry_run and mechanism != "retire":
+            # Before any entry of the source is written (FR-VIS-03). A failure
+            # fails the run: entries must not land without their row.
+            self._apply_visibility(config, force=True)
 
         if source_id == FORM_SOURCE_ID and mechanism != JobKind.LAZY_REFRESH.value:
             return self._publish_forms(dry_run=dry_run, forced=forced)

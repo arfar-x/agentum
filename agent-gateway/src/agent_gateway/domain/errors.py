@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from agent_gateway.domain.identity import NoUpstreamKey
+
 
 class GatewayError(Exception):
     """Base class. ``status`` and ``code`` follow OpenAI's error object."""
@@ -34,10 +36,29 @@ class ModelNotAllowed(InvalidRequest):
     param = "model"
 
 
+class ModelNotFound(GatewayError):
+    """No such model, or an agent the caller may not use: the two are indistinguishable on purpose."""
+
+    status = 404
+    type = "invalid_request_error"
+    code = "model_not_found"
+    param = "model"
+
+    def __init__(self, model: str) -> None:
+        super().__init__(f"The model `{model}` does not exist or you do not have access to it.")
+
+
 class AuthenticationFailed(GatewayError):
     status = 401
     type = "invalid_request_error"
     code = "invalid_api_key"
+
+
+class IdentityUnavailable(GatewayError):
+    status = 503
+    type = "server_error"
+    code = "identity_unavailable"
+    retry_after = 30
 
 
 class RateLimited(GatewayError):
@@ -75,3 +96,19 @@ class UpstreamRejected(GatewayError):
             self.type = err.get("type") or self.type
             self.code = err.get("code")
             self.param = err.get("param")
+
+
+class UpstreamKeyRequired(GatewayError, NoUpstreamKey):
+    """The caller has no model key and the deployment has no shared one."""
+
+    status = 403
+    type = "invalid_request_error"
+    code = "upstream_key_required"
+
+
+class UpstreamKeyRejected(GatewayError):
+    """The model provider refused the key a request was made with."""
+
+    status = 502
+    type = "server_error"
+    code = "upstream_key_rejected"

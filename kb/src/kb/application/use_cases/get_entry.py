@@ -20,6 +20,7 @@ from kb.application.ports.entry_store import EntryStore
 from kb.domain.content import CONTENT_PAGE_CHARS, ContentPage, clamp_offset, next_offset
 from kb.domain.entry import Entry, fetch_hint_for
 from kb.domain.merge import apply_override
+from kb.domain.visibility import Caller
 from kb.domain.policies import DEFAULT_STALE_AFTER, is_indexable, is_stale
 
 logger = logging.getLogger("kb.get_entry")
@@ -59,8 +60,12 @@ class GetEntry:
         self._stale_after = stale_after
         self._queue_refresh = queue_refresh
 
-    def execute(self, entry_id: str, *, offset: int = 0) -> EntryView | None:
-        entry = self._store.get(entry_id)
+    def execute(
+        self, entry_id: str, *, offset: int = 0, caller: Caller | None = None
+    ) -> EntryView | None:
+        # An entry the caller may not see is answered exactly like one that
+        # does not exist, and nothing below (text, refresh queue) runs for it.
+        entry = self._store.get_visible(entry_id, caller or Caller.anonymous())
         if entry is None:
             return None
         override = self._store.get_override(entry_id)

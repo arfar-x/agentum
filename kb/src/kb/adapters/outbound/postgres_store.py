@@ -38,6 +38,7 @@ from kb.domain.entry import Entry, EntryType
 from kb.domain.merge import Override, apply_override
 from kb.domain.policies import is_indexable
 from kb.domain.text import normalize_all
+from kb.domain.visibility import Caller
 
 MIGRATIONS_DIR = migrations_dir()
 
@@ -68,6 +69,12 @@ SELECT s.entry_id,
  WHERE s.indexable
    AND (%(types)s::text[] IS NULL OR s.type = ANY (%(types)s::text[]))
    AND (%(tags)s::text[] IS NULL OR s.tags && %(tags)s::text[])
+   -- Visibility (FR-VIS-06/07): inside the query, so a restricted entry cannot
+   -- take a ranking slot or a limit. No source_visibility row = not visible.
+   AND (%(operator)s OR EXISTS (
+         SELECT 1 FROM entry e JOIN source_visibility v ON v.source_id = e.source_id
+          WHERE e.id = s.entry_id
+            AND (cardinality(v.groups) = 0 OR v.groups && %(groups)s::text[])))
    AND (t.term %%> s.haystack OR s.haystack LIKE '%%' || t.term || '%%')
  GROUP BY s.entry_id
 HAVING SUM({TITLE_WEIGHT} * word_similarity(t.term, s.title_norm)
@@ -144,6 +151,53 @@ class PostgresEntryStore:
             row = cursor.fetchone()
         return Entry.model_validate(row["data"]) if row else None
 
+    def get_visible(self, entry_id: str, caller: Caller) -> Entry | None:
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT e.data FROM entry e
+                 WHERE e.id = %(id)s
+                   AND (%(operator)s OR EXISTS (
+                        SELECT 1 FROM source_visibility v
+                         WHERE v.source_id = e.source_id
+                           AND (cardinality(v.groups) = 0 OR v.groups && %(groups)s::text[])))
+                """,
+                {"id": entry_id, "operator": caller.operator, "groups": sorted(caller.groups)},
+            )
+            row = cursor.fetchone()
+        return Entry.model_validate(row["data"]) if row else None
+
+    # -- visibility (spec §6.12) -------------------------------------------
+    def apply_visibility(self, groups_by_source, *, at: datetime) -> None:
+        with self._connection.transaction(), self._connection.cursor() as cursor:
+            for source_id, groups in groups_by_source.items():
+                cursor.execute(
+                    """
+                    INSERT INTO source_visibility (source_id, groups, updated_at)
+                    VALUES (%(id)s, %(groups)s::text[], %(at)s)
+                    ON CONFLICT (source_id) DO UPDATE
+                       SET groups = EXCLUDED.groups, updated_at = EXCLUDED.updated_at
+                     WHERE source_visibility.groups IS DISTINCT FROM EXCLUDED.groups
+                    """,
+                    {"id": source_id, "groups": list(groups), "at": at},
+                )
+            # A source nobody configures any more keeps its row while it has
+            # live entries, so retiring them stays a separate, visible step.
+            cursor.execute(
+                """
+                DELETE FROM source_visibility v
+                 WHERE NOT (v.source_id = ANY(%(configured)s))
+                   AND NOT EXISTS (SELECT 1 FROM entry e
+                                    WHERE e.source_id = v.source_id AND e.deleted_at IS NULL)
+                """,
+                {"configured": list(groups_by_source)},
+            )
+
+    def source_groups(self) -> dict[str, tuple[str, ...]]:
+        with self._connection.cursor() as cursor:
+            cursor.execute("SELECT source_id, groups FROM source_visibility")
+            return {row["source_id"]: tuple(row["groups"]) for row in cursor.fetchall()}
+
     def get_many(self, entry_ids: Sequence[str]) -> dict[str, Entry]:
         if not entry_ids:
             return {}
@@ -181,6 +235,7 @@ class PostgresEntryStore:
         types: Sequence[EntryType] | None = None,
         tags: Sequence[str] | None = None,
         limit: int = 30,
+        caller: Caller,
     ) -> list[str]:
         terms = [term for term in normalized_query.split() if len(term) >= MIN_TERM_LENGTH]
         if not terms:
@@ -198,6 +253,8 @@ class PostgresEntryStore:
                     "types": [t.value for t in types] if types else None,
                     "tags": list(tags) if tags else None,
                     "limit": limit,
+                    "operator": caller.operator,
+                    "groups": sorted(caller.groups),
                 },
             )
             return [row["entry_id"] for row in cursor.fetchall()]

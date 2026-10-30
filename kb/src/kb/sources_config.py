@@ -31,6 +31,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from kb.config import process_environment
+from kb.domain.visibility import group_problem
 from kb.domain.content import (
     DEFAULT_RAW_CONTENT_MAX_BYTES,
     MIN_RAW_CONTENT_MAX_BYTES,
@@ -66,6 +67,10 @@ RENAMED_FIELDS = {"reviewed": "approved"}
 #: they would quietly share every source -- including ones added later by
 #: somebody who never saw that line -- so they are refused there by name.
 PER_SOURCE_ONLY = {
+    "groups": (
+        "groups is decided per source -- restrict each source by name, so a source added "
+        "later is never silently hidden or shown by a line it never saw (FR-VIS-02)"
+    ),
     "store_raw_content": (
         "store_raw_content is decided per source -- set it on each source that should "
         "share its documents' text, not under defaults"
@@ -193,6 +198,18 @@ class _BaseSource(BaseModel):
         if not _SOURCE_ID.match(value):
             raise ValueError("use letters, digits, '.', '_' or '-' (it becomes part of every entry id)")
         return value
+
+    @field_validator("groups")
+    @classmethod
+    def _groups_are_usable_names(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        for name in value:
+            problem = group_problem(name)
+            if problem:
+                raise ValueError(problem)
+        if len(set(value)) != len(value):
+            raise ValueError("groups lists a name more than once")
+        return value
+
     enabled: bool = False  # discovery writes candidates disabled; opt in by hand
     mechanisms: Mechanisms = Field(default_factory=Mechanisms)
     #: Keep each document's text in the catalog, readable through `kb_get` by
@@ -200,6 +217,9 @@ class _BaseSource(BaseModel):
     #: Per source only -- `defaults` refuses it -- so sharing a source in full
     #: is always a line somebody wrote about that source.
     store_raw_content: bool = False
+    #: Who may see this source's entries (spec §6.12). Empty = everyone,
+    #: including callers with no group information.
+    groups: tuple[str, ...] = ()
     #: Overrides `defaults.raw_content_max_bytes` for this source.
     raw_content_max_bytes: int | None = Field(default=None, ge=MIN_RAW_CONTENT_MAX_BYTES)
 
@@ -319,6 +339,11 @@ class SourcesConfig(BaseModel):
         """Whether this source keeps its documents' text, and how much of it."""
         max_bytes = source.raw_content_max_bytes or self.defaults.raw_content_max_bytes
         return ContentPolicy(store=source.store_raw_content, max_bytes=max_bytes)
+
+    def visibility(self) -> dict[str, tuple[str, ...]]:
+        """Source id to the groups that may see it, for every configured
+        source -- enabled or not, so switching a source off never exposes it."""
+        return {source.id: tuple(source.groups) for source in self.sources}
 
     def require_approved(self) -> None:
         if not self.approved:

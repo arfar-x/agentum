@@ -5,17 +5,44 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from agent_gateway.domain.identity import Principal
 from agent_gateway.domain.messages import ChatMessage, ToolCall, ToolDef, Usage
 
 
 @dataclass(frozen=True)
+class CredentialDecl:
+    """One variable a tool server accepts: what to call it on screen, whether its value is secret."""
+
+    name: str
+    label: str = ""
+    secret: bool = True        # a secret value is never shown back
+    required: bool = False
+
+
+@dataclass(frozen=True)
+class ProbeTool:
+    """A read-only tool the portal may call with a person's own credentials to show they work."""
+
+    tool: str
+    args: dict = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class ServerInfo:
-    """A tool server, as configured. ``credentials`` are the variables it declares."""
+    """A tool server, as configured. ``credentials`` are the variable names it declares;
+    ``declarations`` carry their labels (empty when the server lists plain names)."""
 
     name: str
     credentials: tuple[str, ...] = ()
     header_prefix: str = ""
     client_terms: tuple[str, ...] = ()   # words that mark a client tool as a stand-in for this server's tools
+    forward_identity: bool = False       # calls carry the caller's groups and the shared trust secret
+    declarations: tuple[CredentialDecl, ...] = ()
+    test: ProbeTool | None = None
+
+    def declared(self) -> tuple[CredentialDecl, ...]:
+        """Every declared variable; a plain name stands for ``{name, label=name, secret, not required}``."""
+        return self.declarations or tuple(CredentialDecl(n, n) for n in self.credentials)
 
     @property
     def needs_credentials(self) -> bool:
@@ -56,7 +83,7 @@ class Settings:
 class TurnRequest:
     """A neutral request: nothing here knows about HTTP."""
 
-    user_id: str
+    principal: Principal
     agent_id: str
     messages: list[ChatMessage]
     client_tools: list[ToolDef] = field(default_factory=list)
@@ -64,6 +91,18 @@ class TurnRequest:
     upstream_model: str | None = None
     stream: bool = False
     request_vars: dict[str, dict[str, str]] = field(default_factory=dict)  # server -> {VAR: value}
+
+    @property
+    def user_id(self) -> str:
+        return self.principal.user_id
+
+
+@dataclass(frozen=True)
+class UpstreamKey:
+    """The model key one person's calls are made with. ``personal`` is False for the shared fallback."""
+
+    secret: str = field(repr=False)
+    personal: bool
 
 
 @dataclass

@@ -21,6 +21,7 @@ from typing import Any, Sequence
 from kb.config import MissingSetting, Settings
 from kb.domain.entry import EntryType
 from kb.domain.merge import Override
+from kb.domain.visibility import Caller
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -157,6 +158,7 @@ def _dispatch(args: argparse.Namespace, container: Any) -> dict[str, Any]:
             types=[EntryType(t) for t in args.type] if args.type else None,
             tags=args.tag,
             limit=args.limit,
+            caller=Caller.operator_tool(),  # an operator tool sees every source (FR-VIS-12)
         )
         return {
             "queries": list(result.queries),
@@ -179,7 +181,7 @@ def _dispatch(args: argparse.Namespace, container: Any) -> dict[str, Any]:
         }
 
     if args.command == "get":
-        view = container.get_entry.execute(args.id, offset=args.offset)
+        view = container.get_entry.execute(args.id, offset=args.offset, caller=Caller.operator_tool())
         if view is None:
             raise _Reportable("not_found", f"no entry with id {args.id!r}", id=args.id)
         return {
@@ -424,6 +426,13 @@ def _sources_command(args: argparse.Namespace, container: Any) -> dict[str, Any]
 
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     try:
+        if not args.dry_run:
+            # The source's row must exist before its entries do (FR-VIS-03).
+            from kb.sources_config import FORM_SOURCE_ID
+
+            container.store.apply_visibility(
+                {**config.visibility(), FORM_SOURCE_ID: ()}, at=container.clock.now()
+            )
         report = container.sync.execute(
             source,
             mode=mode,

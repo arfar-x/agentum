@@ -3,9 +3,11 @@
 Internal-only, with no published port and no authentication of its own -- the
 same trust model `mcp-agent-skills` runs under, and for the same reason:
 reachability from `api` on the backend network is the access control. Unlike
-that server, this one takes **no credentials at all**. The catalog is shared, so
-there is nothing per-user for a caller to supply, and nothing a caller could
-supply that would change what it sees.
+that server, this one takes **no credentials**. The one thing a caller may say
+about itself is its groups (`X-KB-Groups`), and that is believed only when the
+request also carries the shared `X-KB-Trust` secret: anything else on the
+backend network can reach this port, so an unproven claim would let it claim
+any group (FR-VIS-10). Everyone else sees unrestricted sources only.
 
 Both tools return a structured error instead of raising. An agent that gets
 `{"error": {...}}` can tell the user the catalog is unavailable and carry on;
@@ -15,13 +17,16 @@ add context.
 
 from __future__ import annotations
 
+import hmac
 import logging
-from typing import Any
+from typing import Any, Callable, Mapping
 
 from fastmcp import FastMCP
+from fastmcp.server.dependencies import get_http_headers
 
 from kb.container import Container
 from kb.domain.entry import EntryType
+from kb.domain.visibility import Caller
 
 logger = logging.getLogger("kb.mcp")
 
@@ -96,8 +101,34 @@ document with the tool named in `fetch`, or point the user to `location.url`.
 """
 
 
-def build_app(container: Container, languages: tuple[str, ...] = ("en",)) -> FastMCP:
+def caller_from_headers(headers: Mapping[str, str], trust_secret: str | None) -> Caller:
+    """Who is asking (FR-VIS-10/11): the groups in `X-KB-Groups` when
+    `X-KB-Trust` equals the shared secret, otherwise nobody in particular."""
+    if not trust_secret:
+        return Caller.anonymous()
+    presented = headers.get("x-kb-trust") or ""
+    # Constant time, on bytes: compare_digest refuses non-ASCII str.
+    if not hmac.compare_digest(presented.encode("utf-8"), trust_secret.encode("utf-8")):
+        return Caller.anonymous()
+    return Caller.from_header(headers.get("x-kb-groups"))
+
+
+def build_app(
+    container: Container,
+    languages: tuple[str, ...] = ("en",),
+    *,
+    trust_secret: str | None = None,
+    headers: Callable[[], Mapping[str, str]] = get_http_headers,
+) -> FastMCP:
     app = FastMCP(name="kb", instructions=INSTRUCTIONS)
+
+    def caller() -> Caller:
+        # Never raises: a request whose headers cannot be read is anonymous.
+        try:
+            return caller_from_headers(headers(), trust_secret)
+        except Exception:  # noqa: BLE001 - fail closed, not fail the search
+            logger.warning("could not read request headers; treating the caller as anonymous")
+            return Caller.anonymous()
 
     @app.tool(description=search_description(languages))
     def kb_search(
@@ -142,7 +173,9 @@ def build_app(container: Container, languages: tuple[str, ...] = ("en",)) -> Fas
         except ValueError as exc:
             return {"error": {"type": "bad_argument", "message": str(exc)}}
         try:
-            result = container.search.execute([*queries, *catalog_queries], types=parsed_types, tags=tags, limit=limit)
+            result = container.search.execute(
+                [*queries, *catalog_queries], types=parsed_types, tags=tags, limit=limit, caller=caller()
+            )
         except Exception as exc:  # database down, connection dropped, ...
             logger.exception("kb_search failed")
             return {"error": {"type": "catalog_unavailable", "message": str(exc).strip()}}
@@ -166,7 +199,7 @@ def build_app(container: Container, languages: tuple[str, ...] = ("en",)) -> Fas
         documents' text, one page of it in `content` (null otherwise).
         """
         try:
-            view = container.get_entry.execute(id, offset=offset)
+            view = container.get_entry.execute(id, offset=offset, caller=caller())
         except Exception as exc:
             logger.exception("kb_get failed")
             return {"error": {"type": "catalog_unavailable", "message": str(exc).strip()}}
@@ -190,7 +223,11 @@ def main() -> None:  # pragma: no cover -- the container's entrypoint
 
     settings = Settings.from_env()
     container = build(settings)
-    app = build_app(container, settings.summary_languages)
+    if settings.trust_secret:
+        logger.info("caller groups are honoured when X-KB-Trust matches KB_TRUST_SECRET")
+    else:
+        logger.info("KB_TRUST_SECRET is not set: X-KB-Groups is ignored and every caller sees unrestricted sources only")
+    app = build_app(container, settings.summary_languages, trust_secret=settings.trust_secret)
     logger.info("kb mcp server listening on %s:%s/mcp", settings.mcp_host, settings.mcp_port)
     app.run(transport="http", host=settings.mcp_host, port=settings.mcp_port, path="/mcp")
 

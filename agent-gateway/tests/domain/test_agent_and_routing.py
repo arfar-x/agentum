@@ -5,8 +5,12 @@ from pydantic import ValidationError
 
 from agent_gateway.domain.agent import AgentDefinition, validate_agent_set
 from agent_gateway.domain.errors import ModelNotAllowed
+from agent_gateway.domain.identity import Principal
 from agent_gateway.domain.prompt import compose_system_prompt
 from agent_gateway.domain.routing import parse_route
+
+
+ME = Principal(user_id="u1", username="u1")
 
 
 def agent(id="router", **kw):
@@ -48,17 +52,17 @@ def test_client_system_prompt_is_appended_by_default_prepended_or_ignored():
 
 def test_route_selects_agents_and_everything_else_is_passthrough():
     agents = {"router": agent("router"), "locked": agent("locked", allow_model_override=False)}
-    assert parse_route("router", agents).kind == "agent"
-    assert parse_route("gpt-x", agents).kind == "passthrough"
-    assert parse_route("llama:8b", agents).kind == "passthrough"
+    assert parse_route("router", agents, ME).kind == "agent"
+    assert parse_route("gpt-x", agents, ME).kind == "passthrough"
+    assert parse_route("llama:8b", agents, ME).kind == "passthrough"
 
 
 def test_route_override_needs_the_agent_to_allow_it():
     agents = {"router": agent("router"), "locked": agent("locked", allow_model_override=False)}
-    r = parse_route("router:big-model", agents)
+    r = parse_route("router:big-model", agents, ME)
     assert (r.kind, r.agent_id, r.upstream_model) == ("agent", "router", "big-model")
     with pytest.raises(ModelNotAllowed):
-        parse_route("locked:big-model", agents)
+        parse_route("locked:big-model", agents, ME)
 
 
 def test_an_appended_client_prompt_is_marked_lower_priority_and_followed_by_the_agents_identity():

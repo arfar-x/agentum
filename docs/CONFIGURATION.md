@@ -122,10 +122,42 @@ the model endpoint above. Each model it offers is one of the gateway's agents
 (`agent-gateway/config/agents/`). Start it with `make gateway-up`; LibreChat
 reaches it at `http://agent-gateway:8080/v1` over the `gateway-api` network,
 which only `api` and the gateway share. The endpoint uses `user_provided` keys:
-each user creates a key with `make gateway-key-create USER=<email>` and pastes
-it into LibreChat when first picking the endpoint. With the gateway stopped the
+each user pastes their own model key (registered in the gateway portal or with
+`make gateway-key-register OWNER=<account id>`) -- or, with `GATEWAY_ISSUE_KEYS=true`, a key made
+with `make gateway-key-create OWNER=<account id>` -- into LibreChat when first picking the endpoint. With the gateway stopped the
 model list falls back to the agents named in the template and chats fail until
 it is started.
+
+## Identity and access (agent gateway)
+
+The gateway learns who a caller is from Keycloak; see [`KEYCLOAK.md`](KEYCLOAK.md) section A and
+[`RUNBOOK_IDENTITY.md`](RUNBOOK_IDENTITY.md). These live in `.env.agent-gateway` (template
+`.env.agent-gateway.example`); the full contract is
+[`specs/003-identity-access/contracts/headers-and-env.md`](../specs/003-identity-access/contracts/headers-and-env.md).
+They are not in the root `.env`.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `IDENTITY_PROVIDER` | `keycloak` | The only adapter built. Any other value stops startup. |
+| `OIDC_ISSUER` | none, **required** | The realm address as it appears in tokens (`https://<host>/realms/agentflow`). A mismatch makes every token a 401. |
+| `OIDC_AUDIENCE` | `agent-gateway` | Required `aud`. |
+| `OIDC_JWKS_TTL` | `600` | Seconds signing keys are cached. |
+| `DIRECTORY_CLIENT_ID` / `DIRECTORY_CLIENT_SECRET` | `agent-gateway-directory` / **required** | The read-only service account in the target realm; the administrator creates it and gives you the secret. |
+| `DIRECTORY_SYNC_SECONDS` / `DIRECTORY_MAX_STALE_SECONDS` | `300` / `900` | Copy interval; how old the copy may be before model-key callers get 503. The second must be at least twice the first. |
+| `PORTAL_BASE_URL` | empty (portal off) | Public address of the gateway. Setting it requires the next two. |
+| `PORTAL_CLIENT_ID` / `PORTAL_CLIENT_SECRET` | `agent-gateway-portal` / empty | The portal's confidential client; the administrator gives you the secret. |
+| `PORTAL_SESSION_SECRET` | empty | Signs portal cookies, at least 32 bytes (`openssl rand -hex 32`). |
+| `GATEWAY_ISSUE_KEYS` | `false` | Allow gateway-issued `agk_` keys. |
+| `AUDIT_RETENTION_DAYS` | `365` | |
+| `KB_TRUST_SECRET` | generated | Shared with `mcp-kb`: `make up` generates it into `kb/.env` and copies it here. Empty on the gateway means no group is forwarded to the catalog, so restricted sources stay hidden. |
+| `UPSTREAM_API_KEY` | from `VLLM_API_KEY` in `.env` | The shared model key used for people who have not registered their own. Compose sets it; leave `VLLM_API_KEY` empty to require personal keys. |
+
+The Keycloak side (`integrations/keycloak/.env.keycloak`): `KEYCLOAK_URL`, `KEYCLOAK_REALM`,
+`KEYCLOAK_ADMIN_USER`, `KEYCLOAK_ADMIN_PASSWORD` (used by `apply.sh` only, against the local development Keycloak),
+`GATEWAY_PUBLIC_URL`, and for `make idp-up` `KEYCLOAK_DEV_IMAGE` / `KEYCLOAK_DEV_PORT`.
+
+The Telegram bot's `LINK_MODE`, `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_SCOPE` are in
+`integrations/telegram-bot/.env` (see [`integrations/telegram-bot/README.md`](../integrations/telegram-bot/README.md)).
 
 ## MCP: agent-skills
 

@@ -4,8 +4,8 @@
 |---|---|
 | **Spec ID** | SPEC-KB-001 |
 | **Status** | Active — implemented (see §12; two source kinds deferred by choice) |
-| **Version** | 2.11.0 |
-| **Last updated** | 2026-10-18 |
+| **Version** | 2.12.0 |
+| **Last updated** | 2026-10-25 |
 | **Implements** | `kb/` module, `mcp-kb` service |
 | **Related** | [`AGENTS.md`](../../AGENTS.md), [`CONFIGURATION.md`](CONFIGURATION.md), [`OPERATOR_GUIDE.md`](OPERATOR_GUIDE.md), [`kb/README.md`](../README.md) |
 
@@ -55,7 +55,10 @@ inventing one.
   operator writes in the admin console for knowledge that has no home anywhere
   else.
 - N3. Not an access-control system: source systems enforce their own
-  permissions, and the catalog holds nothing restricted (see §10, C4).
+  permissions. The one exception is coarse visibility per source: an operator
+  may restrict a source's entries to named groups, and a caller without group
+  information sees only unrestricted sources (§6.12, C4). There is no per-entry
+  or per-user access.
 
 ## 3. Glossary
 
@@ -119,7 +122,7 @@ case.
 | FR-ENT-07 | Entries MUST round-trip through JSON unchanged. | done |
 | FR-ENT-08 | Catalog timestamps MUST be kept separately from the source's own timestamps. | done |
 | FR-ENT-09 | An entry MUST expose a fetch hint, or none when no tool in this stack can read that source. | done |
-| FR-ENT-10 | Every entry MUST carry an `audience` (default `all`); this version MUST NOT enforce it. | done |
+| FR-ENT-10 | Every entry MUST carry an `audience` (default `all`); this version MUST NOT enforce it. `audience` stays informational: who may see an entry is decided by its source's groups (FR-VIS-01..09), never by this field. | done |
 | FR-ENT-11 | An entry MUST record the id its source knows the document by, so one entry can be re-read on its own. Entry ids are slugs, and slugs do not invert. | done |
 
 ### 6.2 Text matching — `FR-TXT`
@@ -229,7 +232,7 @@ they parse input, call a use case, and serialize the result.
 | FR-MCP-01 | The MCP server MUST expose exactly two tools, `kb_search` and `kb_get`, both read-only. | done |
 | FR-MCP-02 | Each tool's schema MUST describe its arguments well enough for a model to call it correctly without reading the spec, and `kb_search` MUST accept several query strings in one call. | done |
 | FR-MCP-03 | A tool MUST return a structured error rather than raising when the catalog is unreachable, so an agent can say so and carry on instead of failing the turn. | done |
-| FR-MCP-04 | The server MUST NOT accept credentials or per-user variables: the catalog is shared, and there is nothing user-specific for a caller to supply. | done |
+| FR-MCP-04 | The server MUST NOT accept credentials or per-user variables: the catalog is shared, and there is nothing user-specific for a caller to supply. The only caller-supplied identity is a list of group names, honoured only when accompanied by the shared trust secret (FR-VIS-10). | done |
 | FR-MCP-05 | `kb_search` MUST require `catalog_queries`: the same question rewritten in the catalog's language(s) (`KB_SUMMARY_LANGUAGES`), named in the tool's description. Both `queries` and `catalog_queries` are searched and fused. A call whose `catalog_queries` has no non-blank phrase MUST return a structured `bad_argument` error that says what to pass, not search. A schema-required argument is what makes a model translate a question out of the user's language; prose in a description does not. | done |
 
 ### 6.8 Sources — `FR-SRC`
@@ -312,6 +315,27 @@ catalog -- the console asks it to, through a queue (FR-SCH-11). Designed in
 | FR-ADM-20 | The console MUST show what the scheduler sees where only the scheduler can see it: whether syncing is switched off by its environment, and a configuration error that stops it. Nothing the console reads from its own environment may reach a response through a `${VAR}` in the file. | done |
 | FR-ADM-21 | The record editor MUST show an operator a record's summary, in every configured language, together with the control that drafts one on demand -- the summary to write or correct by hand sits directly under that control, not elsewhere in the form -- and, for a record that is published, MUST show the summary the catalog currently serves (and none for a record not yet published) so what agents are told can be compared with what is about to be saved. | done |
 
+### 6.12 Visibility by group — `FR-VIS`
+
+Designed with Spec Kit in [`specs/003-identity-access/`](../../specs/003-identity-access/spec.md). A caller
+is a person (or service) who reached the catalog through the agent gateway; the catalog never
+authenticates anyone itself.
+
+| id | Requirement | Status |
+|---|---|---|
+| FR-VIS-01 | A source MAY carry `groups`, a list of group names. A source with no `groups`, or an empty list, is unrestricted: visible to every caller, including callers with no group information. | done |
+| FR-VIS-02 | Each group MUST be a non-empty name of at most 128 characters with no comma and no control character, without duplicates. `groups` MUST be rejected under `defaults`. | done |
+| FR-VIS-03 | The scheduler MUST record each source's groups in `source_visibility` at the start of every run that touches the source, before writing any of its entries, and when a configuration change is applied. | done |
+| FR-VIS-04 | A source with no `source_visibility` row MUST be invisible to every caller. The migration that adds the table MUST create an unrestricted row for every source that already has entries. | done |
+| FR-VIS-05 | A source's row MUST survive the source's removal from the configuration while it still has live entries, and be deleted when none remain. | done |
+| FR-VIS-06 | Search and read use cases MUST take the caller's groups (empty when unknown). An entry is visible when its source is unrestricted or shares a group with the caller. | done |
+| FR-VIS-07 | The visibility test MUST be applied in the query, before ranking, limits and counts, so a restricted entry affects nothing a caller can observe. | done |
+| FR-VIS-08 | Reading an entry the caller cannot see MUST give the same answer as reading an id that does not exist. | done |
+| FR-VIS-09 | Stored text (§6.10) MUST follow its entry: a caller who cannot see the entry cannot read its text, and gets the same answer as for a missing entry. | done |
+| FR-VIS-10 | The MCP server MUST take the caller's groups from `X-KB-Groups` only when `X-KB-Trust` equals `KB_TRUST_SECRET` (compared in constant time). In every other case the caller has no groups. | done |
+| FR-VIS-11 | With `KB_TRUST_SECRET` unset, the server MUST ignore `X-KB-Groups` and MUST say so once at startup. | done |
+| FR-VIS-12 | The CLI, the scheduler and the admin console are operator tools and MUST see every source regardless of groups. | done |
+
 ## 7. Non-functional requirements
 
 ### 7.1 Architecture — `NFR-ARC`
@@ -351,7 +375,7 @@ catalog -- the console asks it to, through a queue (FR-SCH-11). Designed in
 |---|---|---|
 | NFR-CFG-01 | Only `kb/config.py` may read the process environment. Every other module receives a value, or a mapping obtained from it, as an argument. | done |
 | NFR-CFG-02 | The module owns its variables: `kb/.env.example` MUST document every variable the code reads that compose and the Dockerfile do not set themselves, and the stack's root `.env.example` MUST contain none of them. | done |
-| NFR-CFG-03 | The query path (`mcp-kb`) MUST receive an explicit, short list of variables and no env file, so it can see neither the owner database credential nor any source credential. | done |
+| NFR-CFG-03 | The query path (`mcp-kb`) MUST receive an explicit, short list of variables and no env file, so it can see neither the owner database credential nor any source credential. The list is `KB_DATABASE_URL`, `KB_MCP_HOST`, `KB_MCP_PORT` and `KB_TRUST_SECRET`; it is still no env file and no source credential. | done |
 | NFR-CFG-04 | The module's services MUST interpolate from, and read their environment from, `kb/.env` alone. Nothing in the stack's own `.env` is visible to them, and nothing in `kb/.env` to the rest of the stack. | done |
 | NFR-CFG-05 | The module MUST be self-contained on disk: its compose services, make targets, scripts, configuration template, operator guide and spec live under `kb/`, and the root files only include them. | done |
 
@@ -448,8 +472,12 @@ on every tick.
 - C3. Document content is read live by the calling agent with the user's own
   credentials, so source systems enforce their own permissions -- except for
   sources that store raw content (C6).
-- C4. The catalog is shared and unfiltered in this version; restricted material
-  MUST NOT be catalogued (operational rule, enforced by source selection).
+- C4. The catalog is shared. A source may carry `groups`; its entries are then
+  visible only to callers in one of those groups, and a caller that supplies no
+  group information (for example LibreChat) sees only sources without groups.
+  Restricted material MAY be catalogued, but only behind groups; a source with
+  no groups is visible to everyone. A caller is trusted to name its groups only
+  with the shared trust secret (FR-VIS-10).
 - C5. Source documents and model drafts are untrusted input: data to store,
   never instructions to act on.
 - C6. A source marked `store_raw_content` makes its documents' full text
@@ -457,11 +485,14 @@ on every tick.
   access in the source system. Like C4, this is an operator's decision, made per
   source in tracked configuration; there is no per-user check. Turning the flag
   off and syncing removes the text (FR-CNT-05).
+  Read "every user of the catalog" as "every caller who can see the entry":
+  stored text follows its source's groups (FR-VIS-09).
 
 ## 11. Out of scope
 
-Embeddings; per-team enforcement; per-user or per-team access to stored
-content (C6 is all or nothing per source); chunk-level indexing of document
+Embeddings; per-entry or per-user enforcement (per-source group visibility is in
+scope, §6.12; per-team enforcement below the source is not); per-user access to stored content (C6 is all or nothing per
+source, narrowed to the source's groups); chunk-level indexing of document
 bodies, including searching stored content (FR-CNT-09);
 Confluence and Jira webhooks; write tools that let agents create entries (the
 admin console, §6.11, is operated by a person and is not a tool an agent can
@@ -508,7 +539,7 @@ which a flat catalog cannot answer.
 
 | id | Question | Blocking |
 |---|---|---|
-| Q1 | Which user-identity placeholders LibreChat v0.8.7 supports in MCP headers, needed for per-team filtering later. | No — `audience` is recorded regardless |
+| Q1 | Which user-identity placeholders LibreChat v0.8.7 supports in MCP headers, needed for per-team filtering later. | No — `audience` is recorded regardless. Closed (spec 003): LibreChat sends no group information and does not hold the trust secret, so it sees only unrestricted sources; the question is not needed. |
 | Q2 | Whether an embeddings endpoint will exist; if one does, hybrid retrieval is added behind the existing store port. | No |
 
 ## 15. Change log
@@ -517,6 +548,7 @@ which a flat catalog cannot answer.
 |---|---|---|
 | 2.8.0 | 2026-10-13 | Added §7.4 (NFR-CFG-01..05). The module is now self-contained: its services (`kb/compose.yaml`, included by the root file), variables (`kb/.env.example` -> `kb/.env`), source configuration (`kb/config/sources.yaml`), scripts, make targets, operator guide and this spec all live under `kb/`. The sync services no longer receive the stack's whole `.env`, and the query path still receives no env file. `kb/config.py` is the only module that reads the process environment: `kb/config.py` is the only module that reads the process environment. The webhook receiver, the migrations directory and the source-config loader had each read variables directly, so "which variables does this process need" had no single answer. |
 | 1.0.0 | 2026-09-24 | First specification. Phases 1–3 implemented against it. |
+| 2.12.0 | 2026-10-25 | Built §6.12 (FR-VIS-01..12): per-source group visibility (`groups:` in `sources.yaml`), a `source_visibility` table (migration 005), a trust header pair (`X-KB-Groups`, `X-KB-Trust` against `KB_TRUST_SECRET`) for the caller's groups, and fail-closed handling of unknown sources. Amends N3, C4, C6, §11, Q1, FR-ENT-10, FR-MCP-04 and NFR-CFG-03 to their final wording. Prompted by the agent gateway taking people's identities from the identity provider, which makes "who may see this source" answerable. |
 | 2.11.0 | 2026-10-19 | Added FR-MCP-05: `kb_search` requires `catalog_queries`, the question rewritten in the catalog's language. Documents are catalogued only in `KB_SUMMARY_LANGUAGES`, and a question that reached the catalog in another language (a Persian question against English-only entries) found nothing; the instruction to add the other language lived only in a tool description and was often skipped. |
 | 2.10.0 | 2026-10-18 | Added FR-ADM-21: the record editor puts the summary under the control that drafts it, and shows the summary the catalog currently serves beside it. Before this the summary field sat at the top of the form and nothing near the draft control showed a value. |
 | 2.9.0 | 2026-10-17 | Production hardening of the admin console and its neighbours: NFR-DEP-09 (a lost database connection is replaced, not fatal -- before this, a database restart left the scheduler, console and MCP server failing until restarted by hand) FR-ADM-17 (health reflects the database) and FR-ADM-18 (bounded request bodies; a record's text fits what is kept) FR-CFG-13 (a configuration write is verified, and undone if it fails), FR-CFG-14 and FR-CFG-15 (the console cannot point a source at another component's secrets; source ids are case-insensitively unique), and FR-ADM-19 and FR-ADM-20 (stale record saves are refused; the console reports the scheduler's view of its own environment). The scheduler now publishes manual records that were saved or deleted without its being asked. |

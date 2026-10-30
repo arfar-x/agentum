@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from agent_gateway.adapters.inbound.openai_http import responses_wire as rw
 from agent_gateway.adapters.inbound.openai_http.auth import Caller, authenticate
 from agent_gateway.adapters.inbound.openai_http.chat import KEEPALIVE_SECONDS, QueueSink, request_vars, wire_error
+from agent_gateway.adapters.inbound.openai_http.principal import principal_of
 from agent_gateway.adapters.inbound.openai_http.proxy import forward
 from agent_gateway.application.events import Event
 from agent_gateway.application.models import TurnRequest
@@ -55,9 +56,10 @@ async def responses(request: Request, caller: Caller = Depends(authenticate)):
         model = str(body["model"])
     except (ValueError, KeyError, TypeError) as exc:
         raise InvalidRequest("Request body must be JSON with a 'model'.", param="model") from exc
-    route = parse_route(model, container.config.agents)
+    principal = principal_of(request, caller)
+    route = parse_route(model, container.config.agents, principal)
     if route.kind == "passthrough":
-        return await forward(request, "responses", raw)
+        return await forward(request, "responses", caller, raw)
     check_supported(body)
     previous = None
     if body.get("previous_response_id"):
@@ -65,7 +67,7 @@ async def responses(request: Request, caller: Caller = Depends(authenticate)):
         if previous is None:
             raise InvalidRequest("Previous response not found.", param="previous_response_id")
     messages = rw.input_to_messages(body, previous)
-    turn = TurnRequest(user_id=caller.user_id, agent_id=route.agent_id, upstream_model=route.upstream_model,
+    turn = TurnRequest(principal=caller, agent_id=route.agent_id, upstream_model=route.upstream_model,
                        messages=messages, client_tools=rw.tools_from(body), params=_params(body),
                        stream=bool(body.get("stream")), request_vars=request_vars(request.headers, container.config.servers))
     response_id = rw.new_id("resp")

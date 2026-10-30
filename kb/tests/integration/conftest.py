@@ -41,7 +41,7 @@ def store(dsn):
         cursor.execute(
             "TRUNCATE entry, entry_override, entry_search, search_miss, "
             "source_checkpoint, sync_run, sync_request, scheduler_heartbeat, kb_source, "
-            "kb_source_revision, form_record RESTART IDENTITY CASCADE"
+            "kb_source_revision, form_record, source_visibility RESTART IDENTITY CASCADE"
         )
     try:
         yield store

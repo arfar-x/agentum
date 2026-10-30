@@ -9,7 +9,8 @@ from agent_gateway.domain.messages import ChatMessage
 
 
 async def compact_client_prompt(
-    raw: str, *, user_id: str, model: str, llm: Llm, cache: TextCache | None, settings: Settings
+    raw: str, *, user_id: str, model: str, llm: Llm, cache: TextCache | None, settings: Settings,
+    api_key: str | None = None,
 ) -> str:
     """The prompt to place in the agent's context: as sent if short, else condensed (cached)."""
     if not compaction.needs_compaction(raw, settings.client_prompt_limit_chars):
@@ -25,7 +26,7 @@ async def compact_client_prompt(
             model=model, tools=[],
             messages=[ChatMessage(role="system", content=compaction.COMPACT_SYSTEM),
                       ChatMessage(role="user", content=compaction.compaction_user_message(raw, target))],
-            params={"temperature": 0.1, "max_completion_tokens": target // 2 + 200}))
+            params={"temperature": 0.1, "max_completion_tokens": target // 2 + 200}), api_key)
         condensed = completion.message.text().strip()
         result = condensed if compaction.usable(condensed, raw, target) else compaction.truncate_to(raw, target)
     except Exception:  # noqa: BLE001 -- a compaction problem must never fail the turn

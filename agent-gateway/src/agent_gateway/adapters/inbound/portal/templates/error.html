@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Problem{% endblock %}
+{% block content %}
+<h1>Something to check</h1>
+<p class="error" role="alert">{{ message }}</p>
+{% if again %}<p><a href="/portal/login">Start again</a></p>{% else %}<p><a href="/portal">Back to the portal</a></p>{% endif %}
+{% endblock %}

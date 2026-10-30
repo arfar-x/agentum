@@ -50,5 +50,8 @@ __pycache__/
 # the agent gateway's secrets (copy .env.agent-gateway.example)
 .env.agent-gateway
 
+# the Keycloak integration's settings (copy integrations/keycloak/.env.keycloak.example)
+integrations/keycloak/.env.keycloak
+
 # the gateway's former standalone repository, kept for its history (restore with: mv agent-gateway/.git.standalone agent-gateway/.git)
 agent-gateway/.git.standalone/

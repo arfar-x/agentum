@@ -109,10 +109,16 @@ Optional (compose profile `gateway`); `make up` does not start it.
 
 1. `cp .env.agent-gateway.example .env.agent-gateway`, fill in `POSTGRES_PASSWORD`,
    `DATABASE_URL` (same password), `CREDS_KEY` and `APPROVAL_SECRET`, then `chmod 600` it.
-2. `make gateway-up`. The model it calls is `VLLM_BASE_URL` / `VLLM_DEFAULT_MODEL` from `.env`.
-3. `make gateway-key-create USER=person@example.org` prints that person's key once. Revoke with
-   `make gateway-key-revoke KEY_ID=...`; it takes effect on their next request.
-4. Terminate TLS in front of the published port (`GATEWAY_PUBLISHED_PORT`, default 8080) or bind
+2. Get the realm details from your Keycloak administrator
+   ([`KEYCLOAK_ADMIN_SETUP.md`](KEYCLOAK_ADMIN_SETUP.md)), then set `OIDC_ISSUER`, the directory and
+   portal client ids and secrets (and `PORTAL_BASE_URL`, `PORTAL_SESSION_SECRET` for the portal) in
+   `.env.agent-gateway`. `make up` has already generated
+   `KB_TRUST_SECRET` in `kb/.env` and copies it into `.env.agent-gateway` when that file exists.
+3. `make gateway-up`. The model it calls is `VLLM_BASE_URL` / `VLLM_DEFAULT_MODEL` from `.env`.
+4. People, groups and roles are managed in Keycloak; a person's own model key and tool credentials in the
+   portal or with `make gateway-key-register` / `gateway-creds-set` (all in
+   [`RUNBOOK_IDENTITY.md`](RUNBOOK_IDENTITY.md)). Revoke a key with `make gateway-key-revoke KEY_ID=...`.
+5. Terminate TLS in front of the published port (`GATEWAY_PUBLISHED_PORT`, default 8080) or bind
    it to 127.0.0.1 and use a reverse proxy.
 
 Agents, tool servers and limits are files under `agent-gateway/config/`; restart the service after
@@ -120,8 +126,11 @@ editing. A startup error names the file and the problem.
 
 `CREDS_KEY` encrypts the credentials and paused turns in `gateway_db_data`. `make backup` saves
 `.env.agent-gateway` beside the volume; restore them together, or stored credentials become
-unreadable (users re-enter them with `make gateway-creds-set`). Keys, threads and stored
-credentials live only in that database.
+unreadable (users re-enter them in the portal or with `make gateway-creds-set`). Keys, threads and
+stored credentials live only in that database, filed under each person's Keycloak account id: restore
+Keycloak's own database (not part of this stack's backup) rather than recreating accounts, or the ids
+change and the data is orphaned. `make backup` also copies `integrations/keycloak/.env.keycloak`.
+When Keycloak is down see the last section of [`RUNBOOK_IDENTITY.md`](RUNBOOK_IDENTITY.md).
 
 ## Knowledge base migrations
 

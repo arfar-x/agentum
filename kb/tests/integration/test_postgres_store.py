@@ -14,6 +14,9 @@ import pytest
 from kb.domain.entry import Entry, EntryType, Location
 from kb.domain.merge import Override
 from kb.domain.text import normalize
+from kb.domain.visibility import Caller
+
+ANYONE = Caller.operator_tool()
 
 NOW = datetime(2026, 9, 24, 12, 0, tzinfo=timezone.utc)
 
@@ -62,6 +65,7 @@ GLOSSARY = Entry(
 def catalog(store):
     for entry in (REFUNDS, ONBOARDING, GLOSSARY):
         store.upsert(entry)
+    store.apply_visibility({"confluence-eng": (), "gitlab-platform": ()}, at=NOW)
     return store
 
 
@@ -84,12 +88,12 @@ def test_a_question_reaches_a_page_whose_title_uses_other_words(catalog):
     # Covers: AS-01
     # The founding case: "refund retries" must find "Payment reconciliation",
     # which is exactly what wiki keyword search cannot do.
-    assert catalog.search(normalize("how do we handle refund retries?"))[0] == REFUNDS.id
+    assert catalog.search(normalize("how do we handle refund retries?"), caller=ANYONE)[0] == REFUNDS.id
 
 
 def test_a_persian_query_finds_a_page_summarized_in_persian(catalog):
     # Covers: AS-02
-    assert REFUNDS.id in catalog.search(normalize("بازپرداخت"))
+    assert REFUNDS.id in catalog.search(normalize("بازپرداخت"), caller=ANYONE)
 
 
 def test_persian_spelling_variants_match_because_both_sides_are_normalized(catalog):
@@ -98,32 +102,32 @@ def test_persian_spelling_variants_match_because_both_sides_are_normalized(catal
     # match, which only works because the stored text went through the same
     # normalizer.
     arabic_spelling = "بازپرداخت".replace("ی", "ي")
-    assert REFUNDS.id in catalog.search(normalize(arabic_spelling))
+    assert REFUNDS.id in catalog.search(normalize(arabic_spelling), caller=ANYONE)
 
 
 def test_a_term_in_the_title_outranks_the_same_term_in_a_summary(catalog):
     # Covers: FR-SRCH-10
-    ranked = catalog.search(normalize("refund"))
+    ranked = catalog.search(normalize("refund"), caller=ANYONE)
     assert ranked.index(GLOSSARY.id) < ranked.index(ONBOARDING.id)
 
 
 def test_results_are_filtered_by_type_and_tag_and_limited(catalog):
     # Covers: FR-SRCH-03
-    assert catalog.search(normalize("refund"), types=[EntryType.TERM]) == [GLOSSARY.id]
-    assert catalog.search(normalize("refund"), tags=["payments"]) == [REFUNDS.id]
-    assert len(catalog.search(normalize("refund"), limit=1)) == 1
+    assert catalog.search(normalize("refund"), types=[EntryType.TERM], caller=ANYONE) == [GLOSSARY.id]
+    assert catalog.search(normalize("refund"), tags=["payments"], caller=ANYONE) == [REFUNDS.id]
+    assert len(catalog.search(normalize("refund"), limit=1, caller=ANYONE)) == 1
 
 
 def test_search_ordering_is_stable_across_identical_runs(catalog):
     # Covers: FR-SRCH-02
-    first = catalog.search(normalize("refund"))
-    assert all(catalog.search(normalize("refund")) == first for _ in range(3))
+    first = catalog.search(normalize("refund"), caller=ANYONE)
+    assert all(catalog.search(normalize("refund"), caller=ANYONE) == first for _ in range(3))
 
 
 def test_an_excluded_entry_disappears_from_search_but_keeps_its_row(catalog):
     # Covers: FR-SRCH-04, FR-OVR-04
     catalog.set_override(Override(entry_id=REFUNDS.id, exclude=True, note="duplicate of 3"))
-    assert REFUNDS.id not in catalog.search(normalize("refund retries"))
+    assert REFUNDS.id not in catalog.search(normalize("refund retries"), caller=ANYONE)
     assert catalog.get(REFUNDS.id) == REFUNDS
 
 
@@ -140,7 +144,7 @@ def test_an_override_survives_the_next_sync_of_its_source(catalog):
     assert catalog.get_override(REFUNDS.id).summary == {
         "en": "Corrected: retries stop after three attempts."
     }
-    assert REFUNDS.id in catalog.search(normalize("corrected retries"))
+    assert REFUNDS.id in catalog.search(normalize("corrected retries"), caller=ANYONE)
 
 
 def test_an_override_recorded_before_its_entry_waits_for_it(store):
@@ -148,19 +152,19 @@ def test_an_override_recorded_before_its_entry_waits_for_it(store):
     # An operator may correct something the catalog has not synced yet; that
     # must not fail, and must apply once the entry arrives.
     store.set_override(Override(entry_id=REFUNDS.id, tags=("billing",)))
-    assert store.search(normalize("refund")) == []
+    assert store.search(normalize("refund"), caller=ANYONE) == []
 
     store.upsert(REFUNDS)
-    assert store.search(normalize("refund retries"), tags=["billing"]) == [REFUNDS.id]
+    assert store.search(normalize("refund retries"), tags=["billing"], caller=ANYONE) == [REFUNDS.id]
 
 
 def test_clearing_an_override_restores_the_generated_text(catalog):
     # Covers: FR-OVR-06
     catalog.set_override(Override(entry_id=REFUNDS.id, exclude=True))
-    assert REFUNDS.id not in catalog.search(normalize("refund retries"))
+    assert REFUNDS.id not in catalog.search(normalize("refund retries"), caller=ANYONE)
 
     catalog.clear_override(REFUNDS.id)
-    assert REFUNDS.id in catalog.search(normalize("refund retries"))
+    assert REFUNDS.id in catalog.search(normalize("refund retries"), caller=ANYONE)
 
 
 def test_touching_an_entry_moves_last_seen_only(catalog):
@@ -178,13 +182,13 @@ def test_touching_an_entry_moves_last_seen_only(catalog):
 def test_a_missing_document_leaves_search_and_comes_back_on_revival(catalog):
     # Covers: FR-REC-05
     assert catalog.mark_missing([REFUNDS.id], at=NOW) == 1
-    assert REFUNDS.id not in catalog.search(normalize("refund retries"))
+    assert REFUNDS.id not in catalog.search(normalize("refund retries"), caller=ANYONE)
     assert catalog.get(REFUNDS.id).deleted_at == NOW
     assert catalog.mark_missing([REFUNDS.id], at=NOW) == 0  # already gone: not double-counted
 
     catalog.revive(REFUNDS.id)
     assert catalog.get(REFUNDS.id).deleted_at is None
-    assert REFUNDS.id in catalog.search(normalize("refund retries"))
+    assert REFUNDS.id in catalog.search(normalize("refund retries"), caller=ANYONE)
 
 
 def test_reconciliation_can_ask_one_source_for_everything_it_owns(catalog):
@@ -219,10 +223,10 @@ def test_the_search_index_is_rebuildable_from_the_entries(catalog):
     # lets backups cover only the gap log and the checkpoints.
     with catalog._connection.transaction(), catalog._connection.cursor() as cursor:
         cursor.execute("TRUNCATE entry_search")
-    assert catalog.search(normalize("refund retries")) == []
+    assert catalog.search(normalize("refund retries"), caller=ANYONE) == []
 
     assert catalog.rebuild_search_index() == 3
-    assert catalog.search(normalize("refund retries"))[0] == REFUNDS.id
+    assert catalog.search(normalize("refund retries"), caller=ANYONE)[0] == REFUNDS.id
 
 
 def test_the_query_role_can_read_and_log_gaps_and_nothing_else(store):
@@ -268,7 +272,7 @@ def test_a_write_is_committed_not_just_visible_to_its_own_connection(dsn, catalo
     try:
         assert observer.get(REFUNDS.id) == REFUNDS
         assert observer.get_override(REFUNDS.id).note == "written by the first connection"
-        assert observer.search(normalize("refund retries"))[0] == REFUNDS.id
+        assert observer.search(normalize("refund retries"), caller=ANYONE)[0] == REFUNDS.id
     finally:
         observer.close()
 

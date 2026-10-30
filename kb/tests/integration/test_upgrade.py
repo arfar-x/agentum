@@ -60,7 +60,10 @@ def test_history_written_before_the_console_survives_the_upgrade(old_database):
         )
     store.set_checkpoint("jira", "2026-10-01 10:00")
 
-    assert store.migrate(MIGRATIONS) == ["004_admin_console.sql"], "only the new migration is applied"
+    assert store.migrate(MIGRATIONS) == [
+        "004_admin_console.sql",
+        "005_source_visibility.sql",
+    ], "only the new migrations are applied"
     assert store.migrate(MIGRATIONS) == [], "and it is a no-op the second time"
 
     runs = PostgresRunLog(store.connection).list_runs(limit=10)

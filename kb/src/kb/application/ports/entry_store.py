@@ -10,13 +10,14 @@ domain's fusion.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Iterable, Protocol, Sequence, runtime_checkable
+from typing import Iterable, Mapping, Protocol, Sequence, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from kb.domain.content import RawContent
 from kb.domain.entry import Entry, EntryType
 from kb.domain.merge import Override
+from kb.domain.visibility import Caller
 
 
 class ContentSlice(BaseModel):
@@ -40,6 +41,11 @@ class ContentSlice(BaseModel):
 @runtime_checkable
 class EntryStore(Protocol):
     def get(self, entry_id: str) -> Entry | None: ...
+
+    def get_visible(self, entry_id: str, caller: Caller) -> Entry | None:
+        """The entry, or None when it does not exist *or* the caller may not
+        see its source -- the two are one answer on purpose (FR-VIS-08)."""
+        ...
 
     def get_many(self, entry_ids: Sequence[str]) -> dict[str, Entry]: ...
 
@@ -106,8 +112,12 @@ class EntryStore(Protocol):
         types: Sequence[EntryType] | None = None,
         tags: Sequence[str] | None = None,
         limit: int = 30,
+        caller: Caller,
     ) -> list[str]:
         """Ranked entry ids for one already-normalized query, best first.
+
+        Entries of sources the caller may not see are excluded in the query
+        itself, before ranking and the limit (FR-VIS-07).
 
         One query at a time on purpose: combining several is the domain's job
         (`ranking.reciprocal_rank_fusion`), so it stays testable without a
@@ -132,3 +142,20 @@ class EntryStore(Protocol):
         ...
 
     def finish_refresh(self, entry_id: str, *, error: str | None = None) -> None: ...
+
+
+@runtime_checkable
+class SourceVisibility(Protocol):
+    """Which groups may see each source (spec §6.12). Written by the scheduler
+    from `sources.yaml`; read inside the store's queries."""
+
+    def apply_visibility(self, groups_by_source: Mapping[str, Sequence[str]], *, at: datetime) -> None:
+        """Make the table say exactly this for the configured sources, and drop
+        the rows of sources that are no longer configured and have no live
+        entries (FR-VIS-05). A row of a removed source that still has entries
+        is left as it was."""
+        ...
+
+    def source_groups(self) -> dict[str, tuple[str, ...]]:
+        """Every row: source id to its groups (empty = unrestricted)."""
+        ...

@@ -10,22 +10,38 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from agent_gateway.application.models import ServerInfo, Settings
+from agent_gateway.application.models import CredentialDecl, ProbeTool, ServerInfo, Settings
 from agent_gateway.domain.agent import AgentDefinition, validate_agent_set
 from agent_gateway.domain.errors import ConfigError
 
 _ENV = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
 
+class CredentialFile(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(pattern=r"^[A-Z][A-Z0-9_]*$")
+    label: str = ""
+    secret: bool = True
+    required: bool = False
+
+
+class ProbeFile(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    tool: str = Field(min_length=1)
+    args: dict[str, Any] = {}
+
+
 class ServerFile(BaseModel):
     model_config = ConfigDict(extra="forbid")
     url: str
     timeout: float = 60.0
-    credentials: list[str] = []
+    credentials: list[str | CredentialFile] = []
     header_prefix: str = ""
     client_terms: list[str] = []
+    forward_identity: bool = False
+    test: ProbeFile | None = None
 
 
 class RetrievalFile(BaseModel):
@@ -124,7 +140,15 @@ def load_config(config_dir: Path, env: Mapping[str, str] | None = None) -> Gatew
     raw_servers = (_read(servers_path, env) if servers_path.exists() else {}).get("servers", {})
     for name, body in raw_servers.items():
         parsed = _validate(ServerFile, body, servers_path)
-        servers[name] = ServerInfo(name, tuple(parsed.credentials), parsed.header_prefix, tuple(parsed.client_terms))
+        decls = tuple(CredentialDecl(c, c) if isinstance(c, str)
+                      else CredentialDecl(c.name, c.label or c.name, c.secret, c.required)
+                      for c in parsed.credentials)
+        names = [d.name for d in decls]
+        if len(set(names)) != len(names):
+            raise ConfigError(f"{servers_path}: servers.{name}.credentials: a variable is declared twice")
+        probe = ProbeTool(parsed.test.tool, dict(parsed.test.args)) if parsed.test else None
+        servers[name] = ServerInfo(name, tuple(names), parsed.header_prefix, tuple(parsed.client_terms),
+                                   declarations=decls, test=probe, forward_identity=parsed.forward_identity)
         urls[name] = (parsed.url, parsed.timeout)
 
     agents: dict[str, AgentDefinition] = {}

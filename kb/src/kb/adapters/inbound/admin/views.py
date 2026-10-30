@@ -119,6 +119,9 @@ def source_card(
         # catalog user whatever their access to the original (spec C6).
         "store_raw_content": policy.store,
         "raw_content_max_bytes": policy.max_bytes,
+        # Who may see the source's entries; empty = everyone (spec §6.12). Shown,
+        # not edited here: it is a line in sources.yaml.
+        "groups": list(source.groups),
         # The source's own cap, None when it uses the default.
         "own_raw_content_max_bytes": source.raw_content_max_bytes,
         "settings": source.model_dump(mode="json", exclude=_COMMON_FIELDS),

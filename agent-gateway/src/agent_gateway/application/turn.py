@@ -10,7 +10,8 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from collections.abc import Mapping
+from collections.abc import AsyncIterator, Mapping
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -35,12 +36,15 @@ from agent_gateway.application.ports import (
     Retriever,
     TextCache,
     ToolGateway,
+    UpstreamCredentials,
 )
-from agent_gateway.domain import activity, corrections, retrieval
+from agent_gateway.domain import access, activity, corrections, retrieval
 from agent_gateway.domain.agent import AgentDefinition, ToolBinding
 from agent_gateway.domain.approval import arguments_hash, make_code, parse_decision, verify_code
 from agent_gateway.domain.errors import LoopExhausted
+from agent_gateway.domain.identity import Principal
 from agent_gateway.domain.history import chain_hash, lookup_hash
+from agent_gateway.domain.identity import Principal
 from agent_gateway.domain.interaction import APPROVE, REJECT, AskTool, find_ask_tool, parse_answer
 from agent_gateway.domain.messages import ChatMessage, FunctionCall, ToolCall, ToolDef, ToolFunction, Usage
 from agent_gateway.domain.params import merge_parameters
@@ -69,6 +73,7 @@ class Deps:
     aliases: Mapping[str, str] = field(default_factory=dict)
     cache: TextCache | None = None
     ask_tools: Mapping[str, AskTool] | None = None   # None: the built-in defaults
+    upstream: UpstreamCredentials | None = None      # None: model calls carry no key
 
 
 @dataclass
@@ -118,6 +123,12 @@ class TurnState:
 
 def _agent(state: TurnState, deps: Deps) -> AgentDefinition:
     return deps.agents[state.agent_id]
+
+
+def _principal(state: TurnState) -> Principal:
+    """The caller. A request without one (internal callers, tests) is an unrestricted person."""
+    request = state.request
+    return request.principal or Principal(user_id=request.user_id, username=request.user_id)
 
 
 def _narrate(state: TurnState, deps: Deps) -> bool:
@@ -191,7 +202,11 @@ async def build_toolset(state: TurnState, deps: Deps) -> Exposed:
     agent = _agent(state, deps)
     ex = Exposed()
     reserved = {ASK_USER, USE_CLIENT_TOOLS}
+    principal = _principal(state)
+    can_write = access.can_write(principal, agent)
     for handoff in agent.handoffs:
+        if not access.can_hand_off(principal, deps.agents[handoff.to]):
+            continue
         name = "transfer_to_" + handoff.to.replace("-", "_")
         reserved.add(name)
         ex.handoffs[name] = handoff.to
@@ -216,6 +231,8 @@ async def build_toolset(state: TurnState, deps: Deps) -> Exposed:
         for spec in await deps.tools.list_tools(binding.server):
             if not binding.includes(spec.name) or spec.name in reserved:
                 continue
+            if binding.needs_approval(spec.name) and not can_write:
+                continue      # nothing to approve: the caller may not use this agent's write tools
             match = match_client_tool(spec.name, client_names, servers=deps.servers, aliases=deps.aliases)
             route = choose_route(tool=spec.name, client_name=match if state.client_opt_in else None, needs_credentials=server.needs_credentials,
                                  request_vars=resolve_vars(sent, {}, server.credentials),
@@ -255,8 +272,9 @@ async def prepare(state: TurnState, deps: Deps) -> None:
     now = deps.clock.now()
     thread_hash = lookup_hash(req.user_id, visible)
     thread = await deps.store.get_thread(req.user_id, thread_hash) if thread_hash else None
-    if thread and thread.active_agent in deps.agents:
-        state.agent_id = thread.active_agent
+    principal = _principal(state)
+    if thread and thread.active_agent in deps.agents and access.can_use(principal, deps.agents[thread.active_agent]):
+        state.agent_id = thread.active_agent       # a specialist the caller may no longer use is not continued
     if thread:
         state.client_opt_in = thread.client_opt_in
         state.trace_prior = list(thread.trace)
@@ -276,7 +294,18 @@ async def prepare(state: TurnState, deps: Deps) -> None:
 
     if pending is not None:
         state.resumed = True
-        state.agent_id = pending.agent_id if pending.agent_id in deps.agents else state.agent_id
+        if pending.agent_id in deps.agents:
+            if not access.can_use(principal, deps.agents[pending.agent_id]):
+                await _say(state, deps, "You can no longer use the agent this was waiting on. Nothing was changed.", block=True)
+                state.stage = "finish"
+                return
+            state.agent_id = pending.agent_id
+        if pending.kind == "approval" and pending.approval_call is not None:
+            offered = await build_toolset(state, deps)
+            if pending.approval_call.function.name not in offered.gateway:
+                await _say(state, deps, f"You can no longer run `{pending.approval_call.function.name}`. Nothing was changed.", block=True)
+                state.stage = "finish"
+                return
         cut = _last_assistant_index(visible)
         base = visible[:cut] if cut is not None else []
         tail = [m for m in visible[(cut + 1) if cut is not None else 0:] if m.role == "tool"]
@@ -305,7 +334,8 @@ async def prepare(state: TurnState, deps: Deps) -> None:
     kb = agent.preretrieval.kb
     if kb.enabled and deps.retriever is not None and last is not None and last.role == "user":
         try:
-            hits = await deps.retriever.search([last.text()], kb.limit, kb.types)
+            hits = await deps.retriever.search([last.text()], kb.limit, kb.types,
+                                                 identity=state.request.principal)
             state.context.append(retrieval.format_hits(hits))
             state.trace_new.append(trace.entry(state.agent_id, trace.CATALOG_LOOKUP, {"query": last.text()}, ok=True, found=len(hits)))
             await _note(state, deps, activity.retrieval(len(hits)))
@@ -315,9 +345,24 @@ async def prepare(state: TurnState, deps: Deps) -> None:
     state.stage = "model"
 
 
+def _caller(state: TurnState) -> Principal:
+    return Principal(user_id=state.request.user_id, username=state.request.user_id)
+
+
+@asynccontextmanager
+async def _model_key(state: TurnState, deps: Deps) -> AsyncIterator[str | None]:
+    """The key for one upstream call, resolved now for whoever is making this request."""
+    if deps.upstream is None:
+        yield None
+    else:
+        async with deps.upstream.use(_caller(state)) as key:
+            yield key
+
+
 async def _compact(state: TurnState, deps: Deps, raw: str) -> str:
+    key = await deps.upstream.for_principal(_caller(state)) if deps.upstream is not None else None
     return await compact_client_prompt(raw, user_id=state.request.user_id, model=_agent(state, deps).model,
-                                       llm=deps.llm, cache=deps.cache, settings=deps.settings)
+                                       llm=deps.llm, cache=deps.cache, settings=deps.settings, api_key=key)
 
 
 def _verify(deps: Deps, user_id: str, pending: PendingTurn, code: str) -> bool:
@@ -374,8 +419,13 @@ async def model(state: TurnState, deps: Deps) -> None:
 
 
 async def _call_model(state: TurnState, deps: Deps, request: LlmRequest) -> Completion:
+    async with _model_key(state, deps) as key:
+        return await _ask_model(state, deps, request, key)
+
+
+async def _ask_model(state: TurnState, deps: Deps, request: LlmRequest, key: str | None) -> Completion:
     if not state.request.stream:
-        completion = await deps.llm.complete(request)
+        completion = await deps.llm.complete(request, key)
         if completion.reasoning:
             await deps.sink.emit(ReasoningDelta(completion.reasoning))
         await _say(state, deps, completion.message.text())
@@ -384,7 +434,7 @@ async def _call_model(state: TurnState, deps: Deps, request: LlmRequest) -> Comp
     calls: dict[int, dict[str, Any]] = {}
     finish: str | None = None
     usage = Usage()
-    async for delta in deps.llm.stream(request):
+    async for delta in deps.llm.stream(request, key):
         if delta.reasoning:
             reasoning.append(delta.reasoning)
             await deps.sink.emit(ReasoningDelta(delta.reasoning))
@@ -524,7 +574,7 @@ async def _run_gateway(state: TurnState, deps: Deps, call: ToolCall, args: dict[
         if approved:
             run_args["confirm"] = True
     await _note(state, deps, activity.tool_started(spec.name))
-    result = await deps.tools.call(spec.server, spec.name, run_args, creds)
+    result = await deps.tools.call(spec.server, spec.name, run_args, creds, identity=state.request.principal)
     state.trace_new.append(trace.entry(state.agent_id, spec.name, args, ok=not result.is_error))
     text = corrections.redact(result.text, creds.values())[: deps.settings.tool_result_chars]
     state.messages.append(_tool_message(call.id, corrections.tool_failed(spec.name, text) if result.is_error else text))

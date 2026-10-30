@@ -26,7 +26,9 @@ def install_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(GatewayError)
     async def gateway_error(_: Request, exc: GatewayError) -> JSONResponse:
-        return JSONResponse(error_body(exc.message, exc.type, exc.param, exc.code), status_code=exc.status)
+        retry = getattr(exc, "retry_after", None)
+        return JSONResponse(error_body(exc.message, exc.type, exc.param, exc.code), status_code=exc.status,
+                            headers={"Retry-After": str(retry)} if retry else None)
 
     @app.exception_handler(RequestValidationError)
     async def invalid(_: Request, exc: RequestValidationError) -> JSONResponse:

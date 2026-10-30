@@ -25,7 +25,7 @@ The services are in [`kb/compose.yaml`](../compose.yaml), which the root
 
 | Service | Gets | Why |
 |---|---|---|
-| `mcp-kb` (query path) | `KB_DATABASE_URL` (as `kb_reader`), `KB_MCP_HOST`, `KB_MCP_PORT` -- nothing else, no env file | It must not be able to see the owner credential or any source credential (NFR-CFG-03) |
+| `mcp-kb` (query path) | `KB_DATABASE_URL` (as `kb_reader`), `KB_MCP_HOST`, `KB_MCP_PORT`, `KB_TRUST_SECRET` -- nothing else, no env file | It must not be able to see the owner credential or any source credential (NFR-CFG-03) |
 | `kb-scheduler`, `kb-cli`, `kb-webhook` | All of `kb/.env`, plus the owner DSN | They sync, so they hold the source credentials and the writable role |
 | `kb-admin` (opt-in) | The `KB_ADMIN_*` values, the summarizer endpoint and `KB_TIMEZONE`/`KB_SUMMARY_LANGUAGES`, and a DSN as `kb_admin` -- an explicit list, no env file | A web-facing process must never see a source credential (FR-ADM-15) |
 | `kb-db` | The three `KB_POSTGRES_*` values, as Postgres's own `POSTGRES_*` | |
@@ -48,6 +48,7 @@ All live in `kb/.env` unless a row says otherwise.
 | `KB_SUMMARIZER_HOSTNAME`, `KB_SUMMARIZER_HOST_IP` | no | placeholders | Pins the endpoint's host to an IP inside the kb containers, for a host that doesn't resolve from the box. The placeholders are harmless. (The stack's own `MODEL_HOSTNAME`/`MODEL_HOST_IP` are not read here.) |
 | `KB_SUMMARY_LANGUAGES` | no | `en` | Comma-separated, e.g. `en,fa`. Every entry is catalogued in each, which is what lets a question in one language find a document written in another. |
 | `KB_TIMEZONE` | no | `UTC` | IANA name (e.g. `Asia/Tehran`). The nightly full scrape's `at: "03:00"` means 03:00 *here*; everything else compares instants and is unaffected. An unknown name fails at startup. |
+| `KB_TRUST_SECRET` | no | none | The same value as the agent gateway's `KB_TRUST_SECRET`. A request carrying it (`X-KB-Trust`) may name the caller's groups (`X-KB-Groups`); sources with `groups:` are then shown to members of those groups. Unset, the header is ignored (logged once at startup) and every caller sees only sources without `groups:`. A wrong value does not break search; it just hides restricted sources. Only `mcp-kb` is given it explicitly (the sync services read it from `kb/.env` but ignore it). |
 | `KB_SOURCES_APPROVED` | no | `true` | The kill switch: `false` stops every source syncing without editing `sources.yaml`. Overrides the file's own `approved:`, and every command reports which one it used. |
 | `KB_WEBHOOK_SECRET` | for the webhook | none | Without it the receiver refuses to start. Set the same value in GitLab's webhook settings. |
 | `KB_WEBHOOK_PORT` | no | `8323` | Host port, bound to `127.0.0.1` only. |
@@ -98,6 +99,12 @@ disabled. A source syncs once you set `enabled: true` on it; `approved: false`
 (or `KB_SOURCES_APPROVED=false`) stops all of them at once. `${VAR}` and
 `${VAR:-default}` work anywhere except in comments, resolved from the same
 environment the sync services have -- that is, `kb/.env`.
+
+`groups: [name, ...]` on a source restricts who sees its entries (and its kept
+text) to callers in one of those groups; no `groups:` or an empty list means
+everyone. Names are 1-128 characters, no comma or control character, no
+duplicates, and the key is refused under `defaults`. See the operator guide,
+"Restricting a source to groups".
 
 Losing `kb_data` costs the gap log and the sync checkpoints; the catalog itself
 is rebuilt from its sources. See [`docs/OPERATIONS.md`](../../docs/OPERATIONS.md)

@@ -22,3 +22,10 @@ handoffs:
   - {to: string, description: string}
 activity: narrate|quiet
 context_window: int             # optional; reported on /v1/models instead of the default
+access:                          # optional; absent = every signed-in person may use the agent and its write tools
+  groups: [string]               # use the agent if the caller has ANY listed group or ANY listed role
+  roles: [string]                #   (neither given = everyone)
+  write_groups: [string]         # use its approval-gated tools: same rule over these two lists
+  write_roles: [string]          #   (neither given = anyone who may use the agent)
+  # every present list: non-empty, unique, valid names (1-128 chars, no comma/control char);
+  # unknown keys and an empty block are rejected. Groups and roles are assigned in the identity provider.

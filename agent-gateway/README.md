@@ -22,8 +22,16 @@ and the request goes to the upstream model unchanged.
 cp .env.example .env            # fill in UPSTREAM_BASE_URL, DATABASE_URL, REDIS_URL, CREDS_KEY, APPROVAL_SECRET
 python -m agent_gateway check
 python -m agent_gateway serve
-python -m agent_gateway key create you@example.org   # prints the key once
+python -m agent_gateway key register-llm --owner <account-id>   # a person's own model key, read from stdin
+python -m agent_gateway key list --owner <account-id>
+python -m agent_gateway audit list --since 1d
+python -m agent_gateway directory sync|show|orphans
 ```
+
+Owners are the identity provider's account ids (`sub`), never free-text names. Operator commands:
+`key register-llm|create|list|revoke`, `creds list|set|delete [--var]`, `audit list`, `directory sync|show|orphans`, `owner purge`.
+`key create` (a gateway-issued `agk_` key) works only with `GATEWAY_ISSUE_KEYS=true`; secrets are read
+from standard input, never from an argument. `AUDIT_RETENTION_DAYS` (default 365) bounds the audit log.
 
 `CREDS_KEY` is a Fernet key (`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`).
 The gateway needs Postgres and Redis. Put TLS in front of it: it publishes plain HTTP.
@@ -34,7 +42,7 @@ Use the gateway's address with `/v1` as the base URL and your key as the API key
 
 ```python
 from openai import OpenAI
-client = OpenAI(base_url="https://gateway.example/v1", api_key="agw_...")
+client = OpenAI(base_url="https://gateway.example/v1", api_key="agk_...")
 client.chat.completions.create(model="product-assistant", messages=[{"role": "user", "content": "hi"}])
 ```
 
@@ -66,6 +74,26 @@ reply `approve <code>` or `reject <code>` to the message that shows the code.
 `config/agents/*.yaml` define agents, `config/mcp-servers.yaml` the tool servers and
 `config/gateway.yaml` the limits. See `docs/spec.md` for what each setting guarantees, and
 `specs/001-agent-gateway/contracts/agent-file.schema.yaml` for the agent file.
+
+### Who may use an agent
+
+An agent file may carry an `access` block: `groups` / `roles` say who may use the agent, `write_groups` /
+`write_roles` who may use its approval-gated (write) tools. A caller matches a rule with any listed group or
+any listed role; a missing block, or no list, means everyone. People outside the rule do not see the agent in
+`/v1/models`, get the same "model not found" as for an unknown name, are not offered it as a handoff, and
+cannot resume work on it. People who may use it but not write are not offered the write tools. A key
+scope (`agents`, `write`) only narrows this. Access is evaluated per request, never stored in a thread.
+`python -m agent_gateway check` warns about write names no use rule covers and, when the directory copy is
+filled, about group or role names found in no directory entry.
+
+```yaml
+access:
+  groups: [product, engineering]
+  roles: [agent-user]
+  write_groups: [leads]
+```
+
+The self-service portal (`PORTAL_BASE_URL`) is described in `docs/portal.md`.
 
 ## Test
 

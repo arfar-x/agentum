@@ -6,7 +6,9 @@ import fnmatch
 from collections.abc import Mapping
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from agent_gateway.domain.identity import valid_name
 
 AGENT_ID = r"^[a-z0-9][a-z0-9-]*$"
 
@@ -43,6 +45,54 @@ class Preretrieval(BaseModel):
     kb: KbRetrieval = KbRetrieval()
 
 
+class AgentAccess(BaseModel):
+    """Who may use an agent and who may use its approval-gated (write) tools.
+
+    A caller matches a rule when it has any listed group or any listed role. A list that is not
+    given plays no part: with neither ``groups`` nor ``roles`` everyone may use the agent, and with
+    neither write list anyone who may use the agent may use its write tools.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    groups: tuple[str, ...] | None = None
+    roles: tuple[str, ...] | None = None
+    write_groups: tuple[str, ...] | None = None
+    write_roles: tuple[str, ...] | None = None
+
+    @field_validator("groups", "roles", "write_groups", "write_roles", mode="before")
+    @classmethod
+    def _list_to_tuple(cls, value: Any) -> Any:
+        return tuple(value) if isinstance(value, list) else value
+
+    @field_validator("groups", "roles", "write_groups", "write_roles")
+    @classmethod
+    def _names(cls, value: tuple[str, ...] | None) -> tuple[str, ...] | None:
+        if value is None:
+            return None
+        if not value:
+            raise ValueError("a list must not be empty; leave it out instead")
+        bad = [n for n in value if not valid_name(n)]
+        if bad:
+            raise ValueError(f"invalid name {bad[0]!r}: 1 to 128 characters, no comma, no control character")
+        if len(set(value)) != len(value):
+            raise ValueError("names must be unique")
+        return value
+
+    @model_validator(mode="after")
+    def _not_empty(self) -> AgentAccess:
+        if self.groups is None and self.roles is None and self.write_groups is None and self.write_roles is None:
+            raise ValueError("give groups, roles, write_groups, write_roles or remove the block")
+        return self
+
+    @property
+    def restricts_use(self) -> bool:
+        return self.groups is not None or self.roles is not None
+
+    @property
+    def restricts_write(self) -> bool:
+        return self.write_groups is not None or self.write_roles is not None
+
+
 class AgentDefinition(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -64,6 +114,7 @@ class AgentDefinition(BaseModel):
     handoffs: tuple[Handoff, ...] = ()
     activity: Literal["narrate", "quiet"] = "narrate"
     context_window: int | None = Field(default=None, gt=0)
+    access: AgentAccess | None = None
 
     @field_validator("client_tools", mode="before")
     @classmethod

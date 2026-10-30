@@ -221,9 +221,14 @@ the agent allows it. Specified in [`agent-gateway/docs/spec.md`](../agent-gatewa
 `/v1/` is proxied. Errors, usage and streaming use OpenAI's shapes. Models report their context
 window.
 
-**Auth and limits.** Every request carries a key (`agw_...`) that identifies a user. State (threads,
-credentials, paused turns) is scoped to that user. Rate limit: 120 requests a minute per key by
-default (`agent-gateway/config/gateway.yaml`).
+**Auth and limits.** Identity is a Keycloak account (`sub`). A request carries a Keycloak access token
+(the Telegram bot, the portal, automations), or the person's own registered model key, or, only with
+`GATEWAY_ISSUE_KEYS`, a gateway-issued key. The gateway resolves the caller to a person, their groups and
+their roles, decides which agents they may use, and calls the model with their own key. State (threads,
+credentials, paused turns, audit) is scoped to the account id. Keycloak is the only place people, groups and
+roles are managed; the gateway reads them from tokens and from a periodic read-only copy. See
+[`KEYCLOAK.md`](KEYCLOAK.md) and [`specs/003-identity-access`](../specs/003-identity-access/spec.md). Rate
+limit: 120 requests a minute per person by default (`agent-gateway/config/gateway.yaml`).
 
 **One turn** (`application/turn.py`):
 
@@ -303,6 +308,12 @@ its own. So each internal service sits on the smallest network that works:
 | `gateway-tools` | `agent-gateway`, `mcp-agent-skills-gateway` | the gateway's own tool server |
 | `gateway-kb` | `agent-gateway`, `mcp-kb` | read access to the catalog without joining `backend` |
 | `gateway-data` | `agent-gateway`, `gateway-db`, `gateway-redis` | the gateway's stores |
+
+Identity adds one more trust edge: the gateway forwards a caller's group names to `mcp-kb` in `X-KB-Groups`,
+and `mcp-kb` believes them only when the request also carries `X-KB-Trust` equal to `KB_TRUST_SECRET`
+(held by the gateway and `mcp-kb` alone). The gateway reaches Keycloak over its public address, never through
+`backend`. Keycloak is an external dependency of this stack (the `integrations/keycloak/` realm template
+describes what the stack needs from it).
 
 Rules that follow from this: only `api` and `agent-gateway` face users or clients; every other
 service has no `ports:` entry; `agent-gateway` never joins `backend`; and secrets live in `.env`

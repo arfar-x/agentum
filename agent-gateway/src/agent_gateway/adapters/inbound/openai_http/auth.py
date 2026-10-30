@@ -1,31 +1,32 @@
-"""Bearer-key authentication and per-key rate limiting."""
+"""Authentication of a request: one Principal per request, resolved by the application's Authenticator."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 from fastapi import Request
 
-from agent_gateway.adapters.outbound.crypto import hash_key
-from agent_gateway.domain.errors import AuthenticationFailed, RateLimited
+from agent_gateway.domain.errors import AuthenticationFailed, IdentityUnavailable, RateLimited
+from agent_gateway.domain.identity import AuthError, Principal
+
+Caller = Principal       # routes keep asking for a "caller"; it is the principal
 
 
-@dataclass(frozen=True)
-class Caller:
-    user_id: str
-    key_id: str
+def bearer_of(request: Request) -> str | None:
+    scheme, _, token = request.headers.get("authorization", "").partition(" ")
+    return token.strip() if scheme.lower() == "bearer" and token.strip() else None
 
 
-async def authenticate(request: Request) -> Caller:
+async def authenticate(request: Request) -> Principal:
+    cached = getattr(request.state, "principal", None)
+    if cached is not None:
+        return cached
     container = request.app.state.container
-    header = request.headers.get("authorization", "")
-    scheme, _, token = header.partition(" ")
-    if scheme.lower() != "bearer" or not token.strip():
-        raise AuthenticationFailed("You didn't provide an API key. Send it as 'Authorization: Bearer <key>'.")
-    found = await container.keys.find_user(hash_key(token.strip()))
-    if found is None:
-        raise AuthenticationFailed("Incorrect API key provided.")
-    key_id, user_id = found
-    if not await container.limiter.allow(key_id, container.config.limits.requests_per_minute):
-        raise RateLimited("Rate limit reached for this key. Slow down and retry shortly.")
-    return Caller(user_id, key_id)
+    try:
+        principal = await container.authenticator.authenticate(bearer_of(request), path=request.url.path)
+    except AuthError as exc:
+        if exc.status == 503:
+            raise IdentityUnavailable("The identity service is unavailable. Retry shortly.") from None
+        raise AuthenticationFailed("Incorrect API key provided.") from None
+    if not await container.limiter.allow(principal.user_id, container.config.limits.requests_per_minute):
+        raise RateLimited("Rate limit reached. Slow down and retry shortly.")
+    request.state.principal = principal
+    return principal

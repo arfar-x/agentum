@@ -57,6 +57,9 @@ sources:
     # leave it off for anything not everyone may read. Set false and sync to
     # remove it again. Per source only: defaults refuses it.
     store_raw_content: false
+    # Who may see this source (and its kept text): callers in one of these
+    # groups. Omit it, or leave it empty, for everyone. Per source only.
+    # groups: [engineering]
     projects:
       - path: platform/specs                 # a whole repo
         scopes: [{ dir: ".", type: spec }]

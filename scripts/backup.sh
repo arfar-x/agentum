@@ -67,4 +67,13 @@ if [ -f integrations/telegram-bot/.env ]; then
   echo "  integrations/telegram-bot/.env -> ${OUT_DIR}/integrations/telegram-bot/ (contains secrets)"
 fi
 
+# The Keycloak integration's settings (admin credentials for apply.sh). Keycloak's own data is not
+# a volume of this stack; back that server up separately (docs/RUNBOOK_IDENTITY.md).
+if [ -f integrations/keycloak/.env.keycloak ]; then
+  mkdir -p "${OUT_DIR}/integrations/keycloak"
+  cp integrations/keycloak/.env.keycloak "${OUT_DIR}/integrations/keycloak/.env.keycloak"
+  chmod 600 "${OUT_DIR}/integrations/keycloak/.env.keycloak"
+  echo "  integrations/keycloak/.env.keycloak -> ${OUT_DIR}/integrations/keycloak/ (contains secrets)"
+fi
+
 echo "Done: ${OUT_DIR}"

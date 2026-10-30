@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Issued keys{% endblock %}
+{% block content %}
+<h1>Gateway keys</h1>
+<p>Keys for scripts and clients that call the gateway as you.</p>
+{% if new_secret %}
+<section class="card" role="status">
+  <h2>Your new key</h2>
+  <p>Copy it now. It is shown only once.</p>
+  <p><code class="secret">{{ new_secret }}</code></p>
+</section>
+{% endif %}
+<h2>Create a key</h2>
+<form method="post" action="/portal/issued">
+  <input type="hidden" name="csrf" value="{{ session.csrf }}">
+  <label for="label">Label</label>
+  <input id="label" name="label" maxlength="64" autocomplete="off">
+  <label for="days">Days until it expires (1 to 365)</label>
+  <input id="days" name="expires_in_days" type="number" min="1" max="365" value="90">
+  <label for="agents">Agents (none selected means all you may use)</label>
+  <select id="agents" name="agents" multiple>
+    {% for a in agents %}<option value="{{ a }}">{{ a }}</option>{% endfor %}
+  </select>
+  <label class="check"><input type="checkbox" name="write" value="1" checked> May use approval-gated write tools</label>
+  <button type="submit">Create</button>
+</form>
+<h2>Your keys</h2>
+{% if keys %}
+<table>
+  <thead><tr><th>Label</th><th>Key</th><th>Expires</th><th>Last used</th><th>State</th><th></th></tr></thead>
+  <tbody>
+  {% for k in keys %}
+  <tr>
+    <td>{{ k.label or "none" }}</td>
+    <td>{{ k.prefix }}...</td>
+    <td>{{ k.expires_at.strftime("%Y-%m-%d") if k.expires_at else "never" }}</td>
+    <td>{{ k.last_used_at.strftime("%Y-%m-%d %H:%M") if k.last_used_at else "never" }}</td>
+    <td>{{ "active" if is_active(k, now) else ("revoked" if k.revoked_at else "expired") }}</td>
+    <td>{% if is_active(k, now) %}
+      <form method="post" action="/portal/issued/{{ k.id }}/revoke">
+        <input type="hidden" name="csrf" value="{{ session.csrf }}">
+        <button type="submit" class="danger">Revoke</button>
+      </form>{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>You have no gateway keys.</p>
+{% endif %}
+{% endblock %}
